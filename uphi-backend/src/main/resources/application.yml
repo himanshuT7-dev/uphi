@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: uphi-backend
+    
+  data:
+    mongodb:
+      uri: "mongodb://localhost:27017/uphi"
+  mongodb:
+    uri: "mongodb://localhost:27017/uphi"
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: uphi.fc@gmail.com
+    password: yshr npri psxq ruke
+
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+server:
+  port: 8080
+
+jwt:
+  secret: aGVyZUlzQU11Y2hMb25nZXJTZWNyZXRLZXlUaGF0TXVzdEJlQXRMZWFzdDJGNTZCb2R5RGF0YQ==
+  expiration: 86400000 # 24 hours in milliseconds
+
+gemini:
+  api-key: AIzaSyDl2gUe6RGUwHkSxxP9fiEGiqPihWQWsD0
+  model: gemini-2.0-flash
+ 
+twilio:
+  account-sid: ${TWILIO_ACCOUNT_SID:ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX}
+  auth-token: ${TWILIO_AUTH_TOKEN:your_auth_token}
+  from-number: ${TWILIO_FROM_NUMBER:+1234567890}
