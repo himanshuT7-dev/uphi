@@ -23,6 +23,9 @@ cd uphi
 ## 4. Environment Configuration
 Environment files (`.env`) are not included in GitHub for security. You must manually create them:
 
+> [!TIP]
+> **See [SECRETS_SETUP.md](file:///Users/vcom/UPHI_College/SECRETS_SETUP.md) for a full list of required keys and how to get them.**
+
 ### Backend Configuration
 1. Navigate to `uphi-backend`.
 2. Create a file named `.env` and copy the content from `.env.example`.
