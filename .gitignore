@@ -1,0 +1,65 @@
+# Git Ignore Patterns for UPHI Project
+
+# Node.js
+node_modules/
+dist/
+.env
+
+# Java
+target/
+*.class
+*.jar
+*.war
+*.ear
+.mvn/wrapper/maven-wrapper.jar
+mvnw
+mvnw.cmd
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# AI Tools (Project specifically has many of these)
+.gemini/
+.trae/
+.windsurf/
+.codebuddy/
+.factory/
+.kode/
+.qoder/
+.qwen/
+.roo/
+.stitch/
+.vibe/
+.zencoder/
+.adal/
+.agents/
+.augment/
+.claude/
+.commandcode/
+.continue/
+.cortex/
+.crush/
+.goose/
+.iflow/
+.junie/
+.kilocode/
+.kiro/
+.mcpjam/
+.mux/
+.neovate/
+.openhands/
+.pi/
+.pochi/
+.trae/
+.windsurf/
+
+# Logs
+*.log
+stderr.log
+stdout.log
+
+# Other
+.DS_Store
