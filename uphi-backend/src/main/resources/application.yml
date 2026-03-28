@@ -12,7 +12,7 @@ spring:
     host: smtp.gmail.com
     port: 587
     username: uphi.fc@gmail.com
-    password: yshr npri psxq ruke
+    password: ${MAIL_PASSWORD:your_app_password}
 
     properties:
       mail:
@@ -25,11 +25,11 @@ server:
   port: 8080
 
 jwt:
-  secret: aGVyZUlzQU11Y2hMb25nZXJTZWNyZXRLZXlUaGF0TXVzdEJlQXRMZWFzdDJGNTZCb2R5RGF0YQ==
+  secret: ${JWT_SECRET:your_jwt_secret}
   expiration: 86400000 # 24 hours in milliseconds
 
 gemini:
-  api-key: AIzaSyDl2gUe6RGUwHkSxxP9fiEGiqPihWQWsD0
+  api-key: ${GEMINI_API_KEY:your_api_key}
   model: gemini-2.0-flash
  
 twilio:
