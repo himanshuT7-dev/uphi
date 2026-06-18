@@ -63,10 +63,27 @@ public class ReceptionistService {
             throw new IllegalArgumentException("Invalid or expired OTP code.");
         }
 
-        if (userRepository.findByEmail(email).isPresent()) {
-            throw new IllegalArgumentException("Patient email address is already registered.");
-        }
+        java.util.Optional<User> existingUserOpt = userRepository.findByEmail(email);
+        java.util.Optional<Patient> existingPatientOpt = (abha != null && !abha.isEmpty()) ? patientRepository.findByAbhaAddress(abha) : java.util.Optional.empty();
 
+        if (existingUserOpt.isPresent() || existingPatientOpt.isPresent()) {
+            Patient existingPatient = existingPatientOpt.orElseGet(() -> patientRepository.findByUserId(existingUserOpt.get().getId()).orElseThrow());
+            existingPatient.setFullName(fullName);
+            existingPatient.setPhone(phone);
+            existingPatient.setDob(dob);
+            existingPatient.setGender(gender);
+            existingPatient.setBloodGroup(bloodGroup);
+            if (oldDiagnosis != null && !oldDiagnosis.isEmpty()) {
+                existingPatient.setConditions(oldDiagnosis);
+            }
+            if (existingPatient.getAffiliatedHospitals() == null) {
+                existingPatient.setAffiliatedHospitals(new java.util.HashSet<>());
+            }
+            if (requester != null && requester.getHospitalId() != null) {
+                existingPatient.getAffiliatedHospitals().add(requester.getHospitalId());
+            }
+            return patientRepository.save(existingPatient);
+        }
 
         String generatedAbha = (abha != null && !abha.isEmpty()) ? abha : "ABHA-" + System.currentTimeMillis();
 
@@ -117,7 +134,8 @@ public class ReceptionistService {
 
     public Patient getPatientById(String id) {
         return patientRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Patient not found with ID: " + id));
+                .or(() -> patientRepository.findByAbhaAddress(id))
+                .orElseThrow(() -> new IllegalArgumentException("Patient not found with ID or ABHA: " + id));
     }
 
     public Patient updatePatient(Patient patient) {

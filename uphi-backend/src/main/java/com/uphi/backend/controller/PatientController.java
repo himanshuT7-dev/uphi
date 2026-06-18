@@ -44,8 +44,8 @@ public class PatientController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('RECEPTIONIST', 'DOCTOR', 'ADMIN', 'MAIN_ADMIN', 'PATIENT')")
-    public ResponseEntity<List<Patient>> getAllPatients() {
-        return ResponseEntity.ok(patientService.getAllPatients());
+    public ResponseEntity<List<Patient>> getAllPatients(Authentication authentication) {
+        return ResponseEntity.ok(patientService.getAllPatients(authentication.getName()));
     }
 
     @GetMapping("/{id}")
@@ -134,8 +134,9 @@ public class PatientController {
             Patient patient = patientService.getPatientById(id)
                     .orElseThrow(() -> new IllegalArgumentException("Patient not found"));
             byte[] pdfBytes = pdfExportService.generatePatientProfilePdf(patient);
+            String fileName = patient.getFullName() != null ? patient.getFullName().replaceAll("\\s+", "_") : patient.getAbhaAddress();
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"UPHI_Profile_" + patient.getAbhaAddress() + ".pdf\"")
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"UPHI_Profile_" + fileName + ".pdf\"")
                     .contentType(MediaType.APPLICATION_PDF)
                     .body(pdfBytes);
         } catch (Exception e) {
@@ -159,11 +160,13 @@ public class PatientController {
                 return ResponseEntity.status(403).build();
             }
             byte[] pdfBytes = pdfService.generatePatientIdCard(patient);
+            String fileName = patient.getFullName() != null ? patient.getFullName().replaceAll("\\s+", "_") : patient.getAbhaAddress();
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=UPHI_ID_" + patient.getAbhaAddress() + ".pdf")
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"UPHI_ID_" + fileName + ".pdf\"")
                     .contentType(MediaType.APPLICATION_PDF)
                     .body(pdfBytes);
         } catch (Exception e) {
+            e.printStackTrace();
             return ResponseEntity.internalServerError().build();
         }
     }
@@ -175,8 +178,9 @@ public class PatientController {
             Patient patient = patientService.getPatientById(id)
                     .orElseThrow(() -> new IllegalArgumentException("Patient not found"));
             byte[] pdfBytes = pdfService.generateDischargeSummary(patient, dischargeData);
+            String fileName = patient.getFullName() != null ? patient.getFullName().replaceAll("\\s+", "_") : patient.getAbhaAddress();
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=UPHI_Discharge_" + patient.getAbhaAddress() + ".pdf")
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"UPHI_Discharge_" + fileName + ".pdf\"")
                     .contentType(MediaType.APPLICATION_PDF)
                     .body(pdfBytes);
         } catch (Exception e) {
@@ -193,8 +197,9 @@ public class PatientController {
             Prescription prescription = prescriptionRepository.findById(prescriptionId)
                     .orElseThrow(() -> new IllegalArgumentException("Prescription not found"));
             byte[] pdfBytes = pdfService.generatePrescriptionPdf(patient, prescription);
+            String fileName = patient.getFullName() != null ? patient.getFullName().replaceAll("\\s+", "_") : patient.getAbhaAddress();
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=UPHI_Rx_" + prescriptionId + ".pdf")
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"UPHI_Rx_" + fileName + "_" + prescriptionId + ".pdf\"")
                     .contentType(MediaType.APPLICATION_PDF)
                     .body(pdfBytes);
         } catch (Exception e) {

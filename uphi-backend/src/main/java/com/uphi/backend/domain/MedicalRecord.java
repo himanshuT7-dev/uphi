@@ -16,10 +16,14 @@ public class MedicalRecord {
     @org.springframework.data.mongodb.core.index.Indexed
     private String hospitalId; // Reference to User collection (Role = HOSPITAL)
 
+    private String hospitalName;
     private String type; // e.g. XRAY, ECG, LAB, PRESCRIPTION
     private Instant date;
 
     private String encryptedFileUrl;
+    private String contentType;
+    private String title;
+    private String clinicalNotes;
     private String diagnosticSummary;
 
     public MedicalRecord() {
@@ -48,6 +52,14 @@ public class MedicalRecord {
 
     public void setHospitalId(String hospitalId) {
         this.hospitalId = hospitalId;
+    }
+
+    public String getHospitalName() {
+        return hospitalName;
+    }
+
+    public void setHospitalName(String hospitalName) {
+        this.hospitalName = hospitalName;
     }
 
     public String getType() {
@@ -80,5 +92,29 @@ public class MedicalRecord {
 
     public void setDiagnosticSummary(String diagnosticSummary) {
         this.diagnosticSummary = diagnosticSummary;
+    }
+
+    public String getContentType() {
+        return contentType;
+    }
+
+    public void setContentType(String contentType) {
+        this.contentType = contentType;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public String getClinicalNotes() {
+        return clinicalNotes;
+    }
+
+    public void setClinicalNotes(String clinicalNotes) {
+        this.clinicalNotes = clinicalNotes;
     }
 }

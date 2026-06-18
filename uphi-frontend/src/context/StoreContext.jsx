@@ -21,13 +21,30 @@ export function DataProvider({ children }) {
                 age: p.age || 0,
                 gender: p.gender || "Unknown",
                 phone: p.phone,
+                email: p.email,
+                dob: p.dob,
                 bloodGroup: p.bloodGroup,
                 vitals: p.vitals || {},
                 conditions: p.conditions || [],
                 allergies: p.allergies || [],
                 medications: p.medications || [],
-                riskScores: p.risk || {},
-                abhaAddress: p.abhaAddress
+                riskScores: (() => {
+                    const rs = p.riskScores || {};
+                    if (!rs.overall) {
+                        const levels = Object.values(rs).map(r => (r?.level || r?.score || '').toString().toLowerCase());
+                        const maxLevel = levels.includes('critical') ? 'Critical' : levels.includes('high') ? 'High' : levels.includes('moderate') ? 'Moderate' : levels.length > 0 ? 'Low' : undefined;
+                        if (maxLevel) rs.overall = maxLevel;
+                    }
+                    return rs;
+                })(),
+                labResults: p.labResults || [],
+                timeline: p.timeline || [],
+                relatedPersons: p.relatedPersons || [],
+                imagingRecords: p.imagingRecords || [],
+                medicalDocuments: p.medicalDocuments || [],
+                abhaAddress: p.abhaAddress,
+                affiliatedHospitals: p.affiliatedHospitals || [],
+                userId: p.userId || null
             }));
             setPatients(formatted);
         } catch (error) {
@@ -43,19 +60,23 @@ export function DataProvider({ children }) {
             const ep = isPatientViewer ? '/api/consents/patient' : '/api/consents/hospital';
             const res = await axios.get(ep).catch(() => ({ data: [] }));
             
-            const formatted = (res.data || []).map(c => ({
-                id: c.id,
-                patient: c.patientId || "Unknown Patient",
-                uhid: c.patientId || "ABHA-XXXX",
-                doctor: c.hospitalId || "Unknown Provider",
-                hospital: c.hospitalId || "Unknown Facility",
-                specialty: "General Medicine",
-                purpose: c.purpose || "General Review",
-                status: c.status ? c.status.toLowerCase() : "pending",
-                requestedAt: c.createdAt ? new Date(c.createdAt).toLocaleDateString() : "Just now",
-                duration: "Until Revoked",
-                original: c
-            }));
+            const formatted = (res.data || []).map(c => {
+                // Find patient name from the patients list if possible
+                const pInfo = patients.find(p => p.id === c.patientId);
+                return {
+                    id: c.id,
+                    patient: pInfo ? pInfo.name : (c.patientId || "Unknown Patient"),
+                    uhid: c.patientId || "ABHA-XXXX",
+                    doctor: c.doctorName || "Unknown Provider",
+                    hospital: c.hospitalName || "Unknown Facility",
+                    specialty: "General Medicine",
+                    purpose: c.purpose || "General Review",
+                    status: c.status ? c.status.toLowerCase() : "pending",
+                    requestedAt: c.createdAt ? new Date(c.createdAt).toLocaleDateString() : "Just now",
+                    duration: "Until Revoked",
+                    original: c
+                };
+            });
             
             setConsents(formatted);
         } catch (error) {

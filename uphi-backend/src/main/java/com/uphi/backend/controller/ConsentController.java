@@ -39,7 +39,7 @@ public class ConsentController {
         if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(401).build();
         }
-        return ResponseEntity.ok(consentService.createConsentRequest(consent));
+        return ResponseEntity.ok(consentService.createConsentRequest(consent, authentication.getName()));
     }
 
     @PutMapping("/{id}/status")
@@ -54,5 +54,13 @@ public class ConsentController {
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
         }
+    }
+
+    @PostMapping("/direct-grant/{patientId}")
+    public ResponseEntity<Consent> directGrant(@PathVariable String patientId, Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(401).build();
+        }
+        return ResponseEntity.ok(consentService.directGrantConsent(patientId, authentication.getName()));
     }
 }

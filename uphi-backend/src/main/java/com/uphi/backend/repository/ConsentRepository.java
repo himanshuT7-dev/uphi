@@ -6,6 +6,6 @@ import java.util.List;
 
 public interface ConsentRepository extends MongoRepository<Consent, String> {
     List<Consent> findByPatientId(String patientId);
-
     List<Consent> findByHospitalId(String hospitalId);
+    List<Consent> findByPatientIdAndHospitalIdAndStatus(String patientId, String hospitalId, String status);
 }

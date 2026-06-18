@@ -20,7 +20,7 @@ public class Hospital {
     private String address;
     private String contactPhone;
     private String email;
-
+    private String logoUrl;
     private Instant createdAt;
 
     public Hospital() {
@@ -44,6 +44,9 @@ public class Hospital {
     
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
+
+    public String getLogoUrl() { return logoUrl; }
+    public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
     
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }

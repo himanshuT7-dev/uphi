@@ -17,6 +17,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class AuthService {
@@ -27,6 +29,7 @@ public class AuthService {
     private final PatientRepository patientRepository;
     private final PasswordEncoder passwordEncoder;
     private final CustomUserDetailsService userDetailsService;
+    private static final Logger logger = LoggerFactory.getLogger(AuthService.class);
 
     public AuthService(AuthenticationManager authenticationManager, JwtUtil jwtUtil,
             UserRepository userRepository, PatientRepository patientRepository, PasswordEncoder passwordEncoder,
@@ -88,6 +91,9 @@ public class AuthService {
 
         if (userOptional.isPresent()) {
             principalId = userOptional.get().getUsername(); // Map to standard Spring Security username
+            logger.info("Login resolution: '{}' maps to user '{}'", originalId, principalId);
+        } else {
+            logger.warn("Login resolution FAILED: '{}' not found in any standard field", originalId);
         }
 
         Authentication authentication = authenticationManager.authenticate(
@@ -100,7 +106,8 @@ public class AuthService {
         String role = resolvedUserOpt.map(u -> u.getRole().name()).orElse("");
         String hospitalId = resolvedUserOpt.map(User::getHospitalId).orElse("");
 
-        return new AuthResponse(jwt, userDetails.getUsername(), role, hospitalId);
+        String fullName = resolvedUserOpt.map(User::getFullName).orElse("");
+        return new AuthResponse(jwt, userDetails.getUsername(), role, hospitalId, fullName);
     }
 
     public AuthResponse refreshToken(String currentUsername) {
@@ -109,6 +116,7 @@ public class AuthService {
         Optional<User> userOpt = userRepository.findByUsername(currentUsername);
         String role = userOpt.map(u -> u.getRole().name()).orElse("");
         String hospitalId = userOpt.map(User::getHospitalId).orElse("");
-        return new AuthResponse(newToken, currentUsername, role, hospitalId);
+        String fullName = userOpt.map(User::getFullName).orElse("");
+        return new AuthResponse(newToken, currentUsername, role, hospitalId, fullName);
     }
 }

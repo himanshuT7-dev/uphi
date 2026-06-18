@@ -3,12 +3,13 @@ package com.uphi.backend.service;
 import com.lowagie.text.Document;
 import com.lowagie.text.Image;
 import com.lowagie.text.pdf.BaseFont;
-
 import com.lowagie.text.pdf.PdfContentByte;
 import com.lowagie.text.pdf.PdfWriter;
 
 import com.uphi.backend.domain.Patient;
 import com.uphi.backend.domain.Invoice;
+import com.uphi.backend.domain.Hospital;
+import com.uphi.backend.domain.MedicalRecord;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -56,27 +57,45 @@ public class PdfService {
         cb.beginText();
         cb.setFontAndSize(bfBold, 11);
         cb.setRGBColorFill(15, 23, 42); // Slate 900
-        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, patient.getFullName().toUpperCase(), 15, 95, 0);
+        String safeName = (patient.getFullName() != null) ? patient.getFullName().toUpperCase() : "UNKNOWN PATIENT";
+        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, safeName, 15, 95, 0);
         
         // 5. ABHA Address / Portal ID
         cb.setFontAndSize(bfNormal, 8);
         cb.setRGBColorFill(71, 85, 105); // Slate 600
-        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "ID: " + patient.getAbhaAddress(), 15, 82, 0);
+        String safeAbha = (patient.getAbhaAddress() != null) ? patient.getAbhaAddress() : "N/A";
+        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "ID: " + safeAbha, 15, 82, 0);
+        cb.endText();
 
         // 6. Demographics
+        cb.beginText();
         cb.setFontAndSize(bfNormal, 7);
         cb.setRGBColorFill(71, 85, 105);
-        String gender = (patient.getGender() != null && !patient.getGender().equalsIgnoreCase("null")) ? patient.getGender() : "N/A";
+        String gender = (patient.getGender() != null && !patient.getGender().equalsIgnoreCase("null") && !patient.getGender().isEmpty()) ? patient.getGender() : "N/A";
         String blood = (patient.getBloodGroup() != null && !patient.getBloodGroup().equalsIgnoreCase("null") && !patient.getBloodGroup().isEmpty()) ? patient.getBloodGroup() : "N/A";
-        String dob = (patient.getDob() != null && !patient.getDob().equalsIgnoreCase("null")) ? patient.getDob() : "N/A";
+        String dob = (patient.getDob() != null && !patient.getDob().equalsIgnoreCase("null") && !patient.getDob().isEmpty()) ? patient.getDob() : "N/A";
         
-        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "GENDER: " + gender, 15, 68, 0);
-        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "BLOOD: " + blood, 15, 58, 0);
+        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "GENDER: " + gender.toUpperCase(), 15, 68, 0);
+        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "BLOOD: " + blood.toUpperCase(), 15, 58, 0);
         cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "DOB: " + dob, 15, 48, 0);
         cb.endText();
 
-        // Simplify QR data to ensure it fits and renders reliably
-        String qrData = "UPHI:" + patient.getAbhaAddress(); 
+        // Patient details in QR Code
+        StringBuilder qrDetails = new StringBuilder();
+        qrDetails.append("UPHI HEALTH ID\n");
+        qrDetails.append("Name: ").append(safeName).append("\n");
+        qrDetails.append("ID: ").append(safeAbha).append("\n");
+        qrDetails.append("DOB: ").append(dob).append("\n");
+        qrDetails.append("Blood: ").append(blood.toUpperCase()).append("\n");
+        qrDetails.append("Gender: ").append(gender.toUpperCase());
+        if (patient.getPhone() != null && !patient.getPhone().isEmpty()) {
+            qrDetails.append("\nPhone: ").append(patient.getPhone());
+        }
+        if (patient.getEmergencyContact() != null && patient.getEmergencyContact().getPhone() != null && !patient.getEmergencyContact().getPhone().isEmpty()) {
+            qrDetails.append("\nEmergency: ").append(patient.getEmergencyContact().getPhone());
+        }
+        
+        String qrData = qrDetails.toString();
         byte[] qrBytes = qrService.generateQrCode(qrData, 200, 200);
         Image qrImage = Image.getInstance(qrBytes);
         qrImage.setAbsolutePosition(165, 35);
@@ -90,7 +109,9 @@ public class PdfService {
         cb.showTextAligned(PdfContentByte.ALIGN_CENTER, "VERIFIED DIGITAL HEALTH RECORD • UPHI NETWORK", 121, 10, 0);
         cb.endText();
 
+        writer.flush();
         document.close();
+        out.flush();
         return out.toByteArray();
     }
 
@@ -202,7 +223,9 @@ public class PdfService {
         cb.showTextAligned(PdfContentByte.ALIGN_CENTER, "UPHI Clinical Network • Verified Digital Billing", 300, 30, 0);
         cb.endText();
 
+        writer.flush();
         document.close();
+        out.flush();
         return out.toByteArray();
     }
 
@@ -290,7 +313,9 @@ public class PdfService {
         cb.showTextAligned(PdfContentByte.ALIGN_CENTER, "UPHI Clinical Network • Verified Healthcare", pageWidth / 2, 30, 0);
         cb.endText();
 
+        writer.flush();
         document.close();
+        out.flush();
         return out.toByteArray();
     }
 
@@ -406,6 +431,298 @@ public class PdfService {
         cb.setRGBColorFill(148, 163, 184);
         cb.showTextAligned(PdfContentByte.ALIGN_CENTER, "This is an electronically generated prescription. Valid without stamp.", pageWidth / 2, 40, 0);
         cb.showTextAligned(PdfContentByte.ALIGN_CENTER, "UPHI Clinical Network • Digital Healthcare", pageWidth / 2, 30, 0);
+        cb.endText();
+
+        writer.flush();
+        document.close();
+        out.flush();
+        return out.toByteArray();
+    }
+
+    public byte[] generateClinicalReportPdf(Patient patient, MedicalRecord record, Hospital hospital) throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        Document document = new Document(com.lowagie.text.PageSize.A4, 50, 50, 50, 50);
+        PdfWriter writer = PdfWriter.getInstance(document, out);
+        document.open();
+        PdfContentByte cb = writer.getDirectContent();
+        
+        BaseFont bfBold = BaseFont.createFont(BaseFont.HELVETICA_BOLD, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
+        BaseFont bfNormal = BaseFont.createFont(BaseFont.HELVETICA, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
+        float pageWidth = document.getPageSize().getWidth();
+        float y = document.getPageSize().getHeight() - 50;
+
+        // 1. HOSPITAL LOGO & HEADER
+        try {
+            if (hospital != null && hospital.getLogoUrl() != null && !hospital.getLogoUrl().isEmpty()) {
+                Image logo = Image.getInstance(new java.net.URL(hospital.getLogoUrl()));
+                logo.setAbsolutePosition(pageWidth - 110, y - 20);
+                logo.scaleToFit(60, 60);
+                cb.addImage(logo);
+            } else {
+                // Fallback: draw a premium hospital icon
+                cb.setRGBColorFill(37, 99, 235);
+                cb.roundRectangle(pageWidth - 110, y - 20, 60, 60, 15);
+                cb.fill();
+                cb.beginText();
+                cb.setFontAndSize(bfBold, 32);
+                cb.setRGBColorFill(255, 255, 255);
+                cb.showTextAligned(PdfContentByte.ALIGN_CENTER, "H", pageWidth - 80, y + 2, 0);
+                cb.endText();
+            }
+        } catch (Exception e) {
+            cb.setRGBColorFill(37, 99, 235);
+            cb.rectangle(pageWidth - 90, y - 10, 40, 40);
+            cb.fill();
+        }
+
+        // UPHI VERIFIED SEAL (New)
+        try {
+            java.io.InputStream sealStream = getClass().getResourceAsStream("/static/images/uphi_seal.png");
+            if (sealStream != null) {
+                byte[] sealBytes = sealStream.readAllBytes();
+                Image seal = Image.getInstance(sealBytes);
+                seal.setAbsolutePosition(450, 50); // Bottom right-ish
+                seal.scaleAbsolute(70, 70);
+                cb.addImage(seal);
+            }
+        } catch (Exception e) {
+            System.err.println("Could not add UPHI Seal: " + e.getMessage());
+        }
+
+        cb.beginText();
+        cb.setFontAndSize(bfBold, 18);
+        cb.setRGBColorFill(30, 41, 59); // Slate 800
+        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, hospital != null ? hospital.getName().toUpperCase() : "UPHI CLINICAL NETWORK", 50, y + 10, 0);
+        
+        cb.setFontAndSize(bfNormal, 9);
+        cb.setRGBColorFill(71, 85, 105); // Slate 600
+        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, hospital != null ? hospital.getAddress() : "Verified Health Facility", 50, y - 5, 0);
+        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "ABHA ID: " + (hospital != null ? hospital.getAbhaFacilityId() : "V-UPHI-GEN"), 50, y - 18, 0);
+        cb.endText();
+
+        y -= 60;
+
+        // 2. REPORT TYPE STRIPE
+        String type = record.getType() != null ? record.getType() : "GENERAL REPORT";
+        int[] typeColor = type.contains("XRAY") || type.contains("RADIOLOGY") ? new int[]{37, 99, 235} :
+                          type.contains("ECG") || type.contains("CARDIOLOGY") ? new int[]{220, 38, 38} :
+                          type.contains("LAB") ? new int[]{139, 92, 246} : new int[]{15, 23, 42};
+
+        cb.setRGBColorFill(typeColor[0], typeColor[1], typeColor[2]);
+        cb.rectangle(50, y, pageWidth - 100, 25);
+        cb.fill();
+
+        cb.beginText();
+        cb.setFontAndSize(bfBold, 12);
+        cb.setRGBColorFill(255, 255, 255);
+        cb.showTextAligned(PdfContentByte.ALIGN_CENTER, type + " REPORT", pageWidth / 2, y + 7, 0);
+        cb.endText();
+
+        y -= 40;
+
+        // 3. PATIENT DATA BLOCK
+        cb.setRGBColorFill(248, 250, 252); // Very light grey
+        cb.rectangle(50, y - 60, pageWidth - 100, 70);
+        cb.fill();
+
+        cb.beginText();
+        cb.setRGBColorFill(15, 23, 42);
+        cb.setFontAndSize(bfBold, 11);
+        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "PATIENT: " + patient.getFullName(), 65, y - 10, 0);
+        cb.setFontAndSize(bfNormal, 10);
+        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "ABHA Address: " + patient.getAbhaAddress(), 65, y - 25, 0);
+        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "Age/Gender: " + (patient.getAge() > 0 ? patient.getAge() : "N/A") + " / " + patient.getGender(), 65, y - 40, 0);
+        
+        cb.setFontAndSize(bfNormal, 10);
+        cb.showTextAligned(PdfContentByte.ALIGN_RIGHT, "Date: " + (record.getDate() != null ? record.getDate().toString() : "N/A"), pageWidth - 65, y - 40, 0);
+        cb.endText();
+
+        y -= 90;
+
+        // 4. CLINICAL CONTENT
+        cb.beginText();
+        cb.setFontAndSize(bfBold, 11);
+        cb.setRGBColorFill(typeColor[0], typeColor[1], typeColor[2]);
+        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "DIAGNOSTIC SUMMARY & FINDINGS", 50, y, 0);
+        cb.endText();
+
+        y -= 25;
+        
+        // Split summary into lines if too long (simplified)
+        String summary = record.getDiagnosticSummary() != null ? record.getDiagnosticSummary() : "No diagnostic notes provided.";
+        cb.beginText();
+        cb.setFontAndSize(bfNormal, 11);
+        cb.setRGBColorFill(15, 23, 42);
+        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, summary, 50, y, 0);
+        cb.endText();
+
+        y -= 60;
+
+        // 5. AUTHENTICATION & FOOTER
+        cb.setLineWidth(0.5f);
+        cb.setRGBColorStroke(203, 213, 225);
+        cb.moveTo(50, y);
+        cb.lineTo(pageWidth - 50, y);
+        cb.stroke();
+
+        y -= 15;
+        cb.beginText();
+        cb.setFontAndSize(bfBold, 10);
+        cb.setRGBColorFill(15, 23, 42);
+        cb.showTextAligned(PdfContentByte.ALIGN_RIGHT, "Digitally Verified by UPHI Node", pageWidth - 50, y, 0);
+        cb.endText();
+
+        cb.beginText();
+        cb.setFontAndSize(bfNormal, 8);
+        cb.setRGBColorFill(148, 163, 184);
+        cb.showTextAligned(PdfContentByte.ALIGN_CENTER, "Universal Patient Health Insight (UPHI) interoperable record format.", pageWidth / 2, 40, 0);
+        cb.showTextAligned(PdfContentByte.ALIGN_CENTER, "Strict technical integrity maintained via zero-loss clinical scan preservation.", pageWidth / 2, 30, 0);
+        cb.endText();
+
+        document.close();
+        return out.toByteArray();
+    }
+
+    public byte[] generateStaffIdCard(com.uphi.backend.domain.User staff, Hospital hospital) throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        com.lowagie.text.Rectangle pageSize = new com.lowagie.text.Rectangle(243, 153);
+        Document document = new Document(pageSize, 0, 0, 0, 0);
+        PdfWriter writer = PdfWriter.getInstance(document, out);
+        document.open();
+        PdfContentByte cb = writer.getDirectContent();
+
+        // 1. Background (Different color for staff)
+        cb.setRGBColorFill(240, 249, 255); 
+        cb.rectangle(0, 0, 243, 153);
+        cb.fill();
+
+        // 2. Header Accent (Role-based colors)
+        int[] accent = staff.getRole() == com.uphi.backend.domain.Role.DOCTOR ? new int[]{13, 148, 136} : new int[]{79, 70, 229};
+        cb.setRGBColorFill(accent[0], accent[1], accent[2]);
+        cb.rectangle(0, 120, 243, 33);
+        cb.fill();
+
+        BaseFont bfBold = BaseFont.createFont(BaseFont.HELVETICA_BOLD, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
+        BaseFont bfNormal = BaseFont.createFont(BaseFont.HELVETICA, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
+
+        cb.beginText();
+        cb.setFontAndSize(bfBold, 10);
+        cb.setRGBColorFill(255, 255, 255);
+        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "UPHI STAFF ID • " + staff.getRole().toString(), 15, 132, 0);
+        cb.endText();
+
+        cb.beginText();
+        cb.setFontAndSize(bfBold, 11);
+        cb.setRGBColorFill(15, 23, 42);
+        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, (staff.getFullName() != null ? staff.getFullName() : staff.getUsername()).toUpperCase(), 15, 95, 0);
+        
+        cb.setFontAndSize(bfNormal, 8);
+        cb.setRGBColorFill( accent[0], accent[1], accent[2] );
+        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, staff.getSpecialization() != null ? staff.getSpecialization().toUpperCase() : "Clinical Operations", 15, 82, 0);
+
+        cb.setFontAndSize(bfNormal, 7);
+        cb.setRGBColorFill(71, 85, 105);
+        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "FACILITY: " + (hospital != null ? hospital.getName() : "UPHI Network"), 15, 65, 0);
+        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "REG ID: " + (staff.getRegistrationId() != null ? staff.getRegistrationId() : "V-" + staff.getUsername()), 15, 53, 0);
+        cb.endText();
+
+        StringBuilder qrDetails = new StringBuilder();
+        qrDetails.append("UPHI STAFF ID\n");
+        qrDetails.append("Role: ").append(staff.getRole().toString()).append("\n");
+        qrDetails.append("Name: ").append((staff.getFullName() != null ? staff.getFullName() : staff.getUsername()).toUpperCase()).append("\n");
+        qrDetails.append("Spec: ").append(staff.getSpecialization() != null ? staff.getSpecialization().toUpperCase() : "Clinical Operations").append("\n");
+        qrDetails.append("Reg ID: ").append(staff.getRegistrationId() != null ? staff.getRegistrationId() : "V-" + staff.getUsername()).append("\n");
+        qrDetails.append("Facility: ").append(hospital != null ? hospital.getName() : "UPHI Network");
+        
+        String qrData = qrDetails.toString();
+        byte[] qrBytes = qrService.generateQrCode(qrData, 200, 200);
+        Image qrImage = Image.getInstance(qrBytes);
+        qrImage.setAbsolutePosition(165, 35);
+        qrImage.scaleAbsolute(55, 55);
+        cb.addImage(qrImage); 
+
+        cb.beginText();
+        cb.setFontAndSize(bfNormal, 5);
+        cb.setRGBColorFill(148, 163, 184);
+        cb.showTextAligned(PdfContentByte.ALIGN_CENTER, "OFFICIAL STAFF CREDENTIAL • PRIVILEGED ACCESS", 121, 10, 0);
+        cb.endText();
+
+        document.close();
+        return out.toByteArray();
+    }
+
+    public byte[] generateHospitalIdCard(Hospital hospital) throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        com.lowagie.text.Rectangle pageSize = new com.lowagie.text.Rectangle(243, 153);
+        Document document = new Document(pageSize, 0, 0, 0, 0);
+        PdfWriter writer = PdfWriter.getInstance(document, out);
+        document.open();
+        PdfContentByte cb = writer.getDirectContent();
+
+        cb.setRGBColorFill(255, 255, 255);
+        cb.rectangle(0, 0, 243, 153);
+        cb.fill();
+
+        cb.setRGBColorFill(15, 23, 42); 
+        cb.rectangle(0, 110, 243, 43);
+        cb.fill();
+
+        BaseFont bfBold = BaseFont.createFont(BaseFont.HELVETICA_BOLD, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
+        BaseFont bfNormal = BaseFont.createFont(BaseFont.HELVETICA, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
+
+        cb.beginText();
+        cb.setFontAndSize(bfBold, 11);
+        cb.setRGBColorFill(255, 255, 255);
+        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "UPHI ACCREDITED FACILITY", 15, 132, 0);
+        cb.setFontAndSize(bfNormal, 7);
+        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "GLOBAL CLINICAL TRUST NETWORK", 15, 122, 0);
+        cb.endText();
+
+        try {
+            if (hospital.getLogoUrl() != null) {
+                Image logo = Image.getInstance(new java.net.URL(hospital.getLogoUrl()));
+                logo.setAbsolutePosition(15, 75);
+                logo.scaleToFit(30, 30);
+                cb.addImage(logo);
+            }
+        } catch (Exception e) {}
+
+        cb.beginText();
+        cb.setFontAndSize(bfBold, 12);
+        cb.setRGBColorFill(15, 23, 42);
+        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, hospital.getName().toUpperCase(), 55, 87, 0);
+        
+        cb.setFontAndSize(bfNormal, 7);
+        cb.setRGBColorFill(71, 85, 105);
+        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, "FID: " + hospital.getAbhaFacilityId(), 55, 77, 0);
+        cb.showTextAligned(PdfContentByte.ALIGN_LEFT, hospital.getAddress(), 15, 60, 0);
+        cb.endText();
+
+        StringBuilder qrDetails = new StringBuilder();
+        qrDetails.append("UPHI ACCREDITED FACILITY\n");
+        qrDetails.append("Name: ").append(hospital.getName().toUpperCase()).append("\n");
+        qrDetails.append("FID: ").append(hospital.getAbhaFacilityId()).append("\n");
+        qrDetails.append("Address: ").append(hospital.getAddress()).append("\n");
+        qrDetails.append("Node ID: ").append(hospital.getId().substring(0,8)).append("\n");
+        qrDetails.append("Global Clinical Trust Network");
+        
+        String qrData = qrDetails.toString();
+        byte[] qrBytes = qrService.generateQrCode(qrData, 200, 200);
+        Image qrImage = Image.getInstance(qrBytes);
+        qrImage.setAbsolutePosition(165, 30);
+        qrImage.scaleAbsolute(58, 58);
+        cb.addImage(qrImage); 
+
+        cb.setLineWidth(0.5f);
+        cb.setRGBColorStroke(226, 232, 240);
+        cb.moveTo(15, 25);
+        cb.lineTo(228, 25);
+        cb.stroke();
+
+        cb.beginText();
+        cb.setFontAndSize(bfNormal, 5);
+        cb.setRGBColorFill(148, 163, 184);
+        cb.showTextAligned(PdfContentByte.ALIGN_CENTER, "CERTIFIED FACILITY ENDPOINT • NODE-ID: " + hospital.getId().substring(0,8), 121, 10, 0);
         cb.endText();
 
         document.close();

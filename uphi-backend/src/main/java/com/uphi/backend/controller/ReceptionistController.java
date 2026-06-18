@@ -160,12 +160,39 @@ public class ReceptionistController {
             Patient patient = receptionistService.getPatientById(id);
             byte[] pdfBytes = pdfService.generatePatientIdCard(patient);
             
+            String fileName = patient.getFullName() != null ? patient.getFullName().replaceAll("\\s+", "_") : patient.getAbhaAddress();
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=UPHI_ID_" + patient.getAbhaAddress() + ".pdf")
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"UPHI_ID_" + fileName + ".pdf\"")
                     .contentType(MediaType.APPLICATION_PDF)
                     .body(pdfBytes);
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().build();
+            return ResponseEntity.internalServerError().body(("Error generating ID card: " + e.getMessage()).getBytes());
+        }
+    }
+
+    @GetMapping("/{id}/id-card/download")
+    public ResponseEntity<byte[]> downloadPatientIdCard(@PathVariable String id, @RequestParam("token") String token) {
+        try {
+            com.uphi.backend.security.JwtUtil jwtUtil = org.springframework.web.context.support.WebApplicationContextUtils
+                .getRequiredWebApplicationContext(
+                    ((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.getRequestAttributes()).getRequest().getServletContext()
+                ).getBean(com.uphi.backend.security.JwtUtil.class);
+            
+            String username = jwtUtil.extractUsername(token);
+            if (username == null) {
+                return ResponseEntity.status(401).body("Invalid token".getBytes());
+            }
+            
+            Patient patient = receptionistService.getPatientById(id);
+            byte[] pdfBytes = pdfService.generatePatientIdCard(patient);
+            
+            String fileName = patient.getFullName() != null ? patient.getFullName().replaceAll("\\s+", "_") : patient.getAbhaAddress();
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"UPHI_ID_" + fileName + ".pdf\"")
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .body(pdfBytes);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(("Error: " + e.getMessage()).getBytes());
         }
     }
 

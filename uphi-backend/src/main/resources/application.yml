@@ -11,7 +11,7 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 587
-    username: uphi.fc@gmail.com
+    username: ${MAIL_USERNAME:uphi.med@gmail.com}
     password: ${MAIL_PASSWORD:your_app_password}
 
     properties:
@@ -25,7 +25,7 @@ server:
   port: 8080
 
 jwt:
-  secret: ${JWT_SECRET:your_jwt_secret}
+  secret: ${JWT_SECRET:aGVyZUlzQU11Y2hMb25nZXJTZWNyZXRLZXlUaGF0TXVzdEJlQXRMZWFzdDJGNTZCb2R5RGF0YQ==}
   expiration: 86400000 # 24 hours in milliseconds
 
 gemini:

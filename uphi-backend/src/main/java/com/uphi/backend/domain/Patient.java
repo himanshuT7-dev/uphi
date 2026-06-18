@@ -5,6 +5,7 @@ import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 import com.uphi.backend.domain.models.*;
+import org.springframework.data.annotation.Transient;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -42,15 +43,20 @@ public class Patient {
     private List<Condition> conditions;
     private Vitals vitals;
     private List<Medication> medications;
-    private Risk risk;
+    private java.util.Map<String, RiskData> riskScores;
     private List<ImagingRecord> imagingRecords;
     private List<MedicalDocument> medicalDocuments;
     private List<RelatedPerson> relatedPersons;
+    private List<LabResult> labResults;
+    private List<TimelineEvent> timeline;
     
     private Set<String> affiliatedHospitals;
 
     private String aadhaar;
     private Instant createdAt;
+
+    @Transient
+    private java.util.Map<String, String> affiliatedHospitalNames;
 
     public Patient() {
         this.createdAt = Instant.now();
@@ -60,11 +66,14 @@ public class Patient {
         this.imagingRecords = new ArrayList<>();
         this.medicalDocuments = new ArrayList<>();
         this.relatedPersons = new ArrayList<>();
+        this.labResults = new ArrayList<>();
+        this.timeline = new ArrayList<>();
         this.affiliatedHospitals = new HashSet<>();
         this.vitals = new Vitals();
-        this.risk = new Risk();
+        this.riskScores = new java.util.HashMap<>();
         this.contactInfo = new ContactInfo();
         this.emergencyContact = new EmergencyContact();
+        this.affiliatedHospitalNames = new java.util.HashMap<>();
     }
 
     public String getId() {
@@ -204,12 +213,12 @@ public class Patient {
         this.medications = medications;
     }
 
-    public Risk getRisk() {
-        return risk;
+    public java.util.Map<String, RiskData> getRiskScores() {
+        return riskScores;
     }
 
-    public void setRisk(Risk risk) {
-        this.risk = risk;
+    public void setRiskScores(java.util.Map<String, RiskData> riskScores) {
+        this.riskScores = riskScores;
     }
 
     public List<ImagingRecord> getImagingRecords() {
@@ -249,5 +258,29 @@ public class Patient {
  
     public void setAadhaar(String aadhaar) {
         this.aadhaar = aadhaar;
+    }
+
+    public java.util.Map<String, String> getAffiliatedHospitalNames() {
+        return affiliatedHospitalNames;
+    }
+
+    public void setAffiliatedHospitalNames(java.util.Map<String, String> affiliatedHospitalNames) {
+        this.affiliatedHospitalNames = affiliatedHospitalNames;
+    }
+
+    public List<LabResult> getLabResults() {
+        return labResults;
+    }
+
+    public void setLabResults(List<LabResult> labResults) {
+        this.labResults = labResults;
+    }
+
+    public List<TimelineEvent> getTimeline() {
+        return timeline;
+    }
+
+    public void setTimeline(List<TimelineEvent> timeline) {
+        this.timeline = timeline;
     }
 }

@@ -46,7 +46,7 @@ public class PdfExportService {
         qrDataMap.put("conditions", patient.getConditions());
         qrDataMap.put("vitals", patient.getVitals());
         qrDataMap.put("medications", patient.getMedications());
-        qrDataMap.put("risk", patient.getRisk());
+        qrDataMap.put("risk", patient.getRiskScores());
 
         String qrData = mapper.writeValueAsString(qrDataMap);
         
