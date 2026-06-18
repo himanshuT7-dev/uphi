@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import saveAs from 'file-saver';
 import {
     Activity, Shield, Clock, Brain, AlertTriangle, User,
     FileText, HeartPulse, Stethoscope, Search, UserPlus, File, Camera,
-    LayoutDashboard as Dashboard, TrendingUp as TrendUp, TrendingDown as TrendDown, Pill, Plus, ChevronLeft, Calendar, Info, LogOut, Settings, ArrowLeft, ShieldCheck, AlertCircle, QrCode, Sparkles, Lock, X, Upload, ChevronRight, Heart, Bell, Eye, BarChart3, Check, CheckCircle, Users, Baby, Package, Trash2, PlusCircle, MinusCircle
+    LayoutDashboard as Dashboard, TrendingUp as TrendUp, TrendingDown as TrendDown, Pill, Plus, ChevronLeft, Calendar, Info, LogOut, Settings, ArrowLeft, ShieldCheck, AlertCircle, QrCode, Sparkles, Lock, X, Upload, ChevronRight, Heart, Bell, Eye, BarChart3, Check, CheckCircle, Users, Baby, Package, Trash2, PlusCircle, MinusCircle, Building2, MessageSquare, Send, Edit2
 } from 'lucide-react';
 
 
@@ -92,6 +93,24 @@ const getTimelineColor = (type) => {
         case "vaccination": return THEME.success;
         default: return THEME.textMuted;
     }
+};
+
+/* --- Utilities --- */
+const fmtVital = (v) => { if (v == null || v === '' || v === '--') return '--'; const n = Number(v); return isNaN(n) ? v : (Number.isInteger(n) ? String(n) : n.toFixed(1)); };
+
+const triggerBinaryDownload = (response, fileName) => {
+    const blob = new Blob([response.data], { type: 'application/pdf' });
+    const reader = new FileReader();
+    reader.onloadend = function() {
+        const a = document.createElement('a');
+        a.href = reader.result;
+        a.download = fileName;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => document.body.removeChild(a), 200);
+    };
+    reader.readAsDataURL(blob);
 };
 
 /* --- Global Sub-Components --- */
@@ -212,7 +231,7 @@ function PatientCard({ patient, onClick, onRemove, onDownloadCard }) {
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                     {onDownloadCard && (
-                        <button onClick={(e) => { e.stopPropagation(); onDownloadCard(patient.id); }} style={{
+                        <button onClick={(e) => { e.stopPropagation(); onDownloadCard(patient.id, patient.name); }} style={{
                             padding: "6px 14px", borderRadius: 10, border: "none", background: THEME.accentMuted, color: THEME.accent, fontSize: 11, fontWeight: 800, cursor: "pointer", textTransform: "uppercase"
                         }}>ID Card</button>
                     )}
@@ -228,12 +247,17 @@ function PatientCard({ patient, onClick, onRemove, onDownloadCard }) {
 }
 
 function OverviewPage({ patients, consents, onNavigate, onSelectPatient, onDownloadCard, onUploadId }) {
-    const userName = localStorage.getItem('uphi_user') || 'staff';
-    const userRole = localStorage.getItem('uphi_role') || 'DOCTOR';
-    const displayName = userName.split('@')[0].replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    const roleLabel = userRole === 'DOCTOR' ? 'Dr.' : '';
+    const userName = sessionStorage.getItem('uphi_user') || 'staff';
+    const userRole = sessionStorage.getItem('uphi_role') || 'DOCTOR';
+    const storedFullName = sessionStorage.getItem('uphi_fullname') || '';
+    const displayName = storedFullName || userName.split('@')[0].replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const roleLabel = (userRole === 'DOCTOR' && !storedFullName) ? 'Dr.' : '';
     const hour = new Date().getHours();
     const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
+
+    const criticalPatients = patients.filter(p => p.riskScores?.overall === 'Critical' || p.riskScores?.overall === 'High');
+    const patientsWithMeds = patients.filter(p => (p.medications?.length || 0) > 0);
+    const todayStr = new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
     const stats = {
         patientsToday: patients.length,
@@ -241,7 +265,168 @@ function OverviewPage({ patients, consents, onNavigate, onSelectPatient, onDownl
         pendingConsents: consents.filter(c => c.status === 'pending').length,
     };
 
+    // ─── DOCTOR-SPECIFIC DASHBOARD ─────────────────────────────────────
+    if (userRole === 'DOCTOR') {
+        return (
+            <div style={{ animation: "fadeIn 0.4s ease" }}>
+                <div style={{ marginBottom: 40, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+                    <div>
+                        <h1 style={{ fontSize: 42, fontWeight: 900, color: THEME.textPrimary, margin: "0 0 6px", fontFamily: "'Outfit', sans-serif", letterSpacing: "-0.03em" }}>
+                            {greeting}, {roleLabel} {displayName}
+                        </h1>
+                        <p style={{ fontSize: 15, color: THEME.textSecondary, margin: 0, fontWeight: 500 }}>Clinical Command Center — {todayStr}</p>
+                    </div>
+                    <div style={{ display: "flex", gap: 10 }}>
+                        <button onClick={() => onNavigate("triage")} style={{ padding: "10px 20px", borderRadius: 14, background: "linear-gradient(135deg, #7c3aed, #6d28d9)", color: "#fff", border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 12px rgba(124,58,237,0.3)" }}>
+                            <Brain size={16} /> AI Triage
+                        </button>
+                        <button onClick={() => onNavigate("nlsearch")} style={{ padding: "10px 20px", borderRadius: 14, background: THEME.accent, color: "#fff", border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 12px rgba(37,99,235,0.3)" }}>
+                            <Search size={16} /> AI Search
+                        </button>
+                    </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, marginBottom: 36 }}>
+                    {[
+                        { icon: <User size={20} />, label: "Total Patients", value: stats.patientsToday, color: THEME.accent },
+                        { icon: <Shield size={20} />, label: "Active Consents", value: stats.activeConsents, color: "#10b981" },
+                        { icon: <Clock size={20} />, label: "Pending Approvals", value: stats.pendingConsents, color: "#f97316" },
+                        { icon: <AlertTriangle size={20} />, label: "High Risk", value: criticalPatients.length, color: "#ef4444" },
+                    ].map((s, i) => (
+                        <div key={i} style={{ background: THEME.card, border: `1px solid ${THEME.border}`, borderRadius: 24, padding: "24px 28px", position: "relative", overflow: "hidden" }}>
+                            <div style={{ position: "absolute", top: -12, right: -12, width: 80, height: 80, borderRadius: "50%", background: `${s.color}0A` }} />
+                            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                                <div style={{ width: 40, height: 40, borderRadius: 12, background: `${s.color}18`, color: s.color, display: "flex", alignItems: "center", justifyContent: "center" }}>{s.icon}</div>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: THEME.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>{s.label}</span>
+                            </div>
+                            <div style={{ fontSize: 36, fontWeight: 900, color: THEME.textPrimary, fontFamily: "'Outfit', sans-serif" }}>{s.value}</div>
+                        </div>
+                    ))}
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 14, marginBottom: 36 }}>
+                    {[
+                        { label: "View Patients", icon: <Search size={18} />, color: THEME.accent, tab: "registry" },
+                        { label: "Appointments", icon: <Calendar size={18} />, color: "#7c3aed", tab: "appointments" },
+                        { label: "Prescriptions", icon: <Pill size={18} />, color: "#10b981", tab: "prescriptions" },
+                        { label: "Consents", icon: <Shield size={18} />, color: "#f97316", tab: "consent" },
+                        { label: "Pharmacy", icon: <Package size={18} />, color: "#ec4899", tab: "pharmacy" },
+                    ].map((action, i) => (
+                        <button key={i} onClick={() => onNavigate(action.tab)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "20px 12px", borderRadius: 20, border: `1px solid ${THEME.border}`, background: THEME.card, cursor: "pointer", transition: "all 0.2s" }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = action.color; e.currentTarget.style.transform = "translateY(-2px)"; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = THEME.border; e.currentTarget.style.transform = "translateY(0)"; }}
+                        >
+                            <div style={{ width: 42, height: 42, borderRadius: 14, background: `${action.color}12`, color: action.color, display: "flex", alignItems: "center", justifyContent: "center" }}>{action.icon}</div>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: THEME.textSecondary }}>{action.label}</span>
+                        </button>
+                    ))}
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 28 }}>
+                    <div style={{ background: THEME.card, border: `1px solid ${THEME.border}`, borderRadius: 28, padding: 32 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
+                            <h2 style={{ fontSize: 20, fontWeight: 800, color: THEME.textPrimary, margin: 0, fontFamily: "'Outfit', sans-serif" }}>My Patients</h2>
+                            <button onClick={() => onNavigate("registry")} style={{ fontSize: 13, color: THEME.accent, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>View All →</button>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                            {patients.slice(0, 8).map(p => {
+                                const colors = ['#3b82f6', '#7c3aed', '#10b981', '#f97316', '#ef4444', '#ec4899'];
+                                const c = colors[p.name.charCodeAt(0) % colors.length];
+                                return (
+                                    <div key={p.id} onClick={() => onSelectPatient(p)} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 16px", borderRadius: 16, cursor: "pointer", transition: "all 0.2s", background: "transparent" }}
+                                        onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.02)"}
+                                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                                    >
+                                        <div style={{ width: 44, height: 44, borderRadius: 14, background: `${c}10`, color: c, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, flexShrink: 0 }}>
+                                            {p.name.split(" ").map(n => n[0]).slice(0, 2).join("")}
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontSize: 15, fontWeight: 700, color: THEME.textPrimary, fontFamily: "'Outfit', sans-serif" }}>{p.name}</div>
+                                            <div style={{ fontSize: 12, color: THEME.textMuted, fontWeight: 500, marginTop: 2 }}>{p.age}y • {p.gender} • {p.bloodGroup || "N/A"} • {p.conditions?.length || 0} conditions</div>
+                                        </div>
+                                        {p.riskScores?.overall && (
+                                            <span style={{ fontSize: 10, padding: "4px 10px", borderRadius: 8, fontWeight: 800, textTransform: "uppercase",
+                                                background: p.riskScores.overall === 'Critical' ? 'rgba(239,68,68,0.1)' : p.riskScores.overall === 'High' ? 'rgba(249,115,22,0.1)' : 'rgba(16,185,129,0.1)',
+                                                color: p.riskScores.overall === 'Critical' ? '#ef4444' : p.riskScores.overall === 'High' ? '#f97316' : '#10b981',
+                                            }}>{p.riskScores.overall}</span>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                        <div style={{ background: THEME.card, border: `1px solid ${THEME.border}`, borderRadius: 28, padding: 28 }}>
+                            <h2 style={{ fontSize: 18, fontWeight: 800, color: THEME.textPrimary, margin: "0 0 20px", fontFamily: "'Outfit', sans-serif" }}>
+                                <AlertTriangle size={18} style={{ verticalAlign: "middle", marginRight: 8, color: "#ef4444" }} />Critical Alerts
+                            </h2>
+                            {criticalPatients.length > 0 ? criticalPatients.slice(0, 3).map(p => (
+                                <div key={p.id} onClick={() => onSelectPatient(p)} style={{ padding: "14px 16px", borderRadius: 14, marginBottom: 8, cursor: "pointer", border: "1px solid rgba(239,68,68,0.15)", background: "rgba(239,68,68,0.03)", transition: "all 0.2s" }}
+                                    onMouseEnter={e => e.currentTarget.style.background = "rgba(239,68,68,0.06)"}
+                                    onMouseLeave={e => e.currentTarget.style.background = "rgba(239,68,68,0.03)"}
+                                >
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: THEME.textPrimary }}>{p.name}</div>
+                                    <div style={{ fontSize: 12, color: "#ef4444", fontWeight: 600, marginTop: 4 }}>Risk: {p.riskScores?.overall || "High"} — {p.conditions?.slice(0, 2).map(c => c.name || c).join(", ") || "Review needed"}</div>
+                                </div>
+                            )) : (
+                                <div style={{ textAlign: "center", padding: "32px 0", color: THEME.textMuted }}>
+                                    <Shield size={32} style={{ marginBottom: 8, opacity: 0.3 }} />
+                                    <div style={{ fontSize: 13, fontWeight: 600 }}>No critical alerts right now</div>
+                                </div>
+                            )}
+                        </div>
+                        <div style={{ background: THEME.card, border: `1px solid ${THEME.border}`, borderRadius: 28, padding: 28, flex: 1 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                                <h2 style={{ fontSize: 18, fontWeight: 800, color: THEME.textPrimary, margin: 0, fontFamily: "'Outfit', sans-serif" }}>Consent Requests</h2>
+                                <button onClick={() => onNavigate("consent")} style={{ fontSize: 13, color: THEME.accent, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>Manage →</button>
+                            </div>
+                            {consents.slice(0, 4).map(c => (
+                                <div key={c.id || Math.random()} style={{ padding: "14px 16px", borderRadius: 14, border: `1px solid ${THEME.border}`, marginBottom: 8, background: c.status === "pending" ? "rgba(249,115,22,0.02)" : "transparent" }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                        <div>
+                                            <div style={{ fontSize: 14, fontWeight: 700, color: THEME.textPrimary }}>{c.patient}</div>
+                                            <div style={{ fontSize: 12, color: THEME.textMuted, marginTop: 3 }}>{c.purpose}</div>
+                                        </div>
+                                        <span style={{ fontSize: 10, padding: "4px 12px", borderRadius: 10, fontWeight: 800, textTransform: "uppercase",
+                                            background: c.status === "pending" ? "#fff7ed" : c.status === "approved" ? "#ecfdf5" : "#f1f5f9",
+                                            color: c.status === "pending" ? "#f97316" : c.status === "approved" ? "#059669" : THEME.textMuted,
+                                        }}>{c.status}</span>
+                                    </div>
+                                </div>
+                            ))}
+                            {consents.length === 0 && <div style={{ textAlign: "center", padding: "24px 0", color: THEME.textMuted, fontSize: 13, fontWeight: 600 }}>No consent requests yet</div>}
+                        </div>
+                    </div>
+                </div>
+
+                {patientsWithMeds.length > 0 && (
+                    <div style={{ marginTop: 28, background: THEME.card, border: `1px solid ${THEME.border}`, borderRadius: 28, padding: 28 }}>
+                        <h2 style={{ fontSize: 18, fontWeight: 800, color: THEME.textPrimary, margin: "0 0 20px", fontFamily: "'Outfit', sans-serif" }}>
+                            <Pill size={18} style={{ verticalAlign: "middle", marginRight: 8, color: "#10b981" }} />Active Prescriptions Across Patients
+                        </h2>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
+                            {patientsWithMeds.slice(0, 6).map(p => (
+                                <div key={p.id} onClick={() => onSelectPatient(p)} style={{ padding: "16px 20px", borderRadius: 16, border: `1px solid ${THEME.border}`, cursor: "pointer", transition: "all 0.2s" }}
+                                    onMouseEnter={e => { e.currentTarget.style.borderColor = "#10b981"; e.currentTarget.style.background = "rgba(16,185,129,0.02)"; }}
+                                    onMouseLeave={e => { e.currentTarget.style.borderColor = THEME.border; e.currentTarget.style.background = "transparent"; }}
+                                >
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: THEME.textPrimary }}>{p.name}</div>
+                                    <div style={{ fontSize: 12, color: THEME.textMuted, marginTop: 4 }}>
+                                        {p.medications.slice(0, 2).map(m => m?.name).filter(Boolean).join(", ") || "Active medications"}
+                                        {p.medications.length > 2 && ` +${p.medications.length - 2} more`}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    // ─── DEFAULT DASHBOARD (Receptionist / Hospital / Admin) ────────────
     return (
+
         <div style={{ animation: "fadeIn 0.4s ease" }}>
             <div style={{ marginBottom: 48 }}>
                 <h1 style={{ fontSize: 40, fontWeight: 800, color: THEME.textPrimary, margin: "0 0 8px", fontFamily: "'Outfit', sans-serif", letterSpacing: "-0.02em" }}>
@@ -301,7 +486,7 @@ function OverviewPage({ patients, consents, onNavigate, onSelectPatient, onDownl
                                     <div style={{ fontSize: 15, fontWeight: 700, color: THEME.textPrimary, fontFamily: "'Outfit', sans-serif" }}>{p.name}</div>
                                     <div style={{ fontSize: 13, color: THEME.textMuted, fontWeight: 500 }}>{p.age}y • {p.id}</div>
                                 </div>
-                                <button onClick={(e) => { e.stopPropagation(); onDownloadCard(p.id); }} style={{
+                                <button onClick={(e) => { e.stopPropagation(); onDownloadCard(p.id, p.name); }} style={{
                                     padding: "6px 12px", borderRadius: 8, border: "none", background: THEME.accentMuted, color: THEME.accent, fontSize: 11, fontWeight: 700, cursor: "pointer"
                                 }}>ID Card</button>
                             </div>
@@ -386,6 +571,8 @@ function QRScannerModal({ onClose, onScan }) {
 function IdVerificationModal({ result, onClose, onConfirmConsent, onRegisterNew }) {
     const isRegistered = result.status !== "NOT_REGISTERED";
     const data = result.extractedData || {};
+    const originHospitals = result.originHospitals || data.affiliatedHospitals || [];
+    const isExternal = result.isExternal && originHospitals.length > 0;
 
     return (
         <div style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(10px)", display: "flex", alignItems: "center", justifyContent: "center", animation: "fadeIn 0.3s ease" }} onClick={onClose}>
@@ -395,11 +582,28 @@ function IdVerificationModal({ result, onClose, onConfirmConsent, onRegisterNew 
                 </div>
                 
                 <h2 style={{ fontSize: 24, fontWeight: 800, color: THEME.textPrimary, marginBottom: 8, fontFamily: "'Outfit', sans-serif" }}>
-                    {isRegistered ? "Identity Verified" : "External ID Detected"}
+                    {isExternal ? "External Patient Found" : isRegistered ? "Identity Verified" : "External ID Detected"}
                 </h2>
-                <p style={{ fontSize: 15, color: THEME.textSecondary, marginBottom: 32, fontWeight: 500 }}>
-                    {isRegistered ? "Universal Health ID matched. Consent is required to access the full clinical history." : "This Health ID is not yet in our registry. Would you like to import the details and register the patient?"}
+                <p style={{ fontSize: 15, color: THEME.textSecondary, marginBottom: 24, fontWeight: 500 }}>
+                    {isExternal 
+                        ? `This patient is registered at another UPHI facility. Link them to your hospital to proceed.`
+                        : isRegistered 
+                            ? "Universal Health ID matched. Consent is required to access the full clinical history." 
+                            : "This Health ID is not yet in our registry. Would you like to import the details and register the patient?"}
                 </p>
+
+                {/* Origin Hospital Badge */}
+                {isExternal && originHospitals.length > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 20px", borderRadius: 16, background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.2)", marginBottom: 24 }}>
+                        <div style={{ width: 36, height: 36, borderRadius: 12, background: "rgba(139,92,246,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <Building2 size={18} color="#8b5cf6" />
+                        </div>
+                        <div>
+                            <div style={{ fontSize: 10, fontWeight: 800, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "0.05em" }}>Registered At</div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: THEME.textPrimary }}>{originHospitals.join(", ")}</div>
+                        </div>
+                    </div>
+                )}
 
                 <div style={{ background: THEME.bg, borderRadius: 20, padding: 24, marginBottom: 32, border: `1px solid ${THEME.border}` }}>
                     <div style={{ fontSize: 11, fontWeight: 800, color: THEME.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>Extracted Metadata</div>
@@ -428,13 +632,13 @@ function IdVerificationModal({ result, onClose, onConfirmConsent, onRegisterNew 
                             {data.conditions?.length > 0 && (
                                 <div style={{ marginBottom: 8 }}>
                                     <div style={{ fontSize: 12, color: THEME.textMuted }}>Conditions</div>
-                                    <div style={{ fontSize: 13, color: THEME.textPrimary, fontWeight: 600 }}>{data.conditions.map(c => c.name).join(", ")}</div>
+                                    <div style={{ fontSize: 13, color: THEME.textPrimary, fontWeight: 600 }}>{data.conditions.map(c => c.name || c).join(", ")}</div>
                                 </div>
                             )}
                             {data.allergies?.length > 0 && (
                                 <div>
                                     <div style={{ fontSize: 12, color: THEME.textMuted }}>Allergies</div>
-                                    <div style={{ fontSize: 13, color: "#dc2626", fontWeight: 700 }}>{data.allergies.map(a => a.name).join(", ")}</div>
+                                    <div style={{ fontSize: 13, color: "#dc2626", fontWeight: 700 }}>{data.allergies.map(a => a.name || a).join(", ")}</div>
                                 </div>
                             )}
                         </div>
@@ -443,8 +647,17 @@ function IdVerificationModal({ result, onClose, onConfirmConsent, onRegisterNew 
 
                 <div style={{ display: "flex", gap: 16 }}>
                     <button onClick={onClose} style={{ flex: 1, padding: "14px", borderRadius: 16, border: `1px solid ${THEME.border}`, background: "#fff", color: THEME.textSecondary, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+                    
+                    <button 
+                        onClick={() => onRegisterNew(data)} 
+                        style={{ flex: 1, padding: "14px", borderRadius: 16, border: `1px solid ${THEME.border}`, background: THEME.card, color: "#16a34a", fontWeight: 800, cursor: "pointer" }}>
+                        Review & Register
+                    </button>
+
                     {isRegistered ? (
-                        <button onClick={onConfirmConsent} style={{ flex: 1.5, padding: "14px", borderRadius: 16, border: "none", background: THEME.accent, color: "#fff", fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 16px rgba(37,99,235,0.2)" }}>Confirm Consent</button>
+                        <button onClick={onConfirmConsent} style={{ flex: 1.5, padding: "14px", borderRadius: 16, border: "none", background: isExternal ? "#8b5cf6" : THEME.accent, color: "#fff", fontWeight: 800, cursor: "pointer", boxShadow: `0 8px 16px ${isExternal ? 'rgba(139,92,246,0.3)' : 'rgba(37,99,235,0.2)'}`, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                            {isExternal ? <><Building2 size={18} /> Deep Link to Hospital</> : "Quick Sync (Consent)"}
+                        </button>
                     ) : (
                         <button onClick={() => onRegisterNew(data)} style={{ flex: 1.5, padding: "14px", borderRadius: 16, border: "none", background: "#16a34a", color: "#fff", fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 16px rgba(22,163,74,0.2)" }}>Import & Register</button>
                     )}
@@ -460,9 +673,21 @@ function ConsentModal({ patient, onClose, onRequest }) {
     const [purpose, setPurpose] = useState("consultation");
     const [sent, setSent] = useState(false);
 
-    const handleRequest = () => {
-        setSent(true);
-        setTimeout(() => { onRequest(); onClose(); }, 1500);
+    const handleRequest = async () => {
+        try {
+            const token = sessionStorage.getItem("uphi_token");
+            await axios.post('/api/consents', {
+                patientId: patient.id,
+                purpose: purpose,
+                duration: duration
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setSent(true);
+            setTimeout(() => { onRequest(); onClose(); }, 1500);
+        } catch (error) {
+            alert("Consent Request Failed: Patient identity mismatch or service unavailable.");
+        }
     };
 
     return (
@@ -544,6 +769,181 @@ function ConsentModal({ patient, onClose, onRequest }) {
     );
 }
 
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, info: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, info) {
+    console.error("ErrorBoundary caught error:", error, info);
+    this.setState({ error, info });
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 40, background: '#fee', color: '#c00', margin: 20, borderRadius: 8 }}>
+          <h2>Something went wrong.</h2>
+          <pre>{this.state.error?.toString()}</pre>
+          <details style={{ whiteSpace: 'pre-wrap', marginTop: 10 }}>
+            {this.state.info?.componentStack}
+          </details>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// Request upload modal
+function DocRequestModal({ onClose, onConfirm }) {
+    const [selected, setSelected] = useState(["Lab Report"]);
+    const options = ["Lab Report", "ECG", "X-ray", "Prescription", "ID Proof", "Vaccine Card"];
+
+    const toggle = (opt) => {
+        if (selected.includes(opt)) setSelected(selected.filter(s => s !== opt));
+        else setSelected([...selected, opt]);
+    };
+
+    return (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+            <div style={{ background: '#fff', borderRadius: 24, padding: 32, width: '100%', maxWidth: 440, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                    <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#0f172a' }}>Request Documents</h3>
+                    <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={20} /></button>
+                </div>
+                
+                <p style={{ fontSize: 14, color: '#64748b', marginBottom: 24 }}>Select the documents you require from the patient. They will receive a notification to upload these specifically.</p>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 32 }}>
+                    {options.map(opt => (
+                        <div 
+                            key={opt}
+                            onClick={() => toggle(opt)}
+                            style={{
+                                padding: '12px 14px', borderRadius: 12, border: `1.5px solid ${selected.includes(opt) ? '#2563eb' : '#e2e8f0'}`,
+                                background: selected.includes(opt) ? '#eff6ff' : '#fff',
+                                color: selected.includes(opt) ? '#2563eb' : '#475569',
+                                fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                                transition: 'all 0.15s'
+                            }}
+                        >
+                            <div style={{ width: 16, height: 16, borderRadius: 4, border: `1.5px solid ${selected.includes(opt) ? '#2563eb' : '#cbd5e1'}`, background: selected.includes(opt) ? '#2563eb' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                {selected.includes(opt) && <Check size={12} color="#fff" />}
+                            </div>
+                            {opt}
+                        </div>
+                    ))}
+                </div>
+
+                <div style={{ display: 'flex', gap: 12 }}>
+                    <button onClick={onClose} style={{ flex: 1, padding: '14px', borderRadius: 14, border: 'none', background: '#f1f5f9', color: '#475569', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                    <button 
+                        onClick={() => onConfirm(selected)} 
+                        disabled={selected.length === 0}
+                        style={{ flex: 2, padding: '14px', borderRadius: 14, border: 'none', background: '#2563eb', color: '#fff', fontWeight: 700, cursor: selected.length === 0 ? 'not-allowed' : 'pointer', opacity: selected.length === 0 ? 0.6 : 1 }}
+                    >
+                        Send Request
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function RequestUploadModal({ patient, onClose }) {
+    const [docType, setDocType] = useState("X-RAY");
+    const [notes, setNotes] = useState("");
+    const [sent, setSent] = useState(false);
+
+    const handleRequest = async () => {
+        try {
+            const token = sessionStorage.getItem("uphi_token");
+            await axios.post('/api/notifications', {
+                recipientId: patient.id,
+                title: "Asset Upload Request",
+                message: `The medical team at ${sessionStorage.getItem('uphi_hospital') || 'their clinic'} has requested a ${docType} upload for your clinical record. ${notes}`,
+                type: "UPLOAD_REQUEST",
+                metadata: docType
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setSent(true);
+            setTimeout(() => { onClose(); }, 2000);
+        } catch (error) {
+            alert("Upload Request Failed. Service temporarily unavailable.");
+        }
+    };
+
+    return (
+        <div style={{
+            position: "fixed", inset: 0, zIndex: 1000,
+            background: "rgba(0,0,0,0.7)", backdropFilter: "blur(10px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            animation: "fadeIn 0.3s ease",
+        }} onClick={onClose}>
+            <div onClick={e => e.stopPropagation()} style={{
+                background: "var(--surface)", borderRadius: 24, padding: 36, width: 440,
+                animation: "scaleIn 0.3s ease",
+            }}>
+                {sent ? (
+                    <div style={{ textAlign: "center", padding: "20px 0" }}>
+                        <div style={{ color: "#22c55e", marginBottom: 16, animation: "scaleIn 0.3s ease" }}>
+                            <CheckCircle size={56} />
+                        </div>
+                        <h3 style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)", margin: "0 0 8px", fontFamily: "'Playfair Display', serif" }}>Request Dispatched</h3>
+                        <p style={{ fontSize: 14, color: "var(--text-muted)" }}>Notification sent to the patient's UPHI mobile app</p>
+                    </div>
+                ) : (
+                    <>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+                            <div style={{ width: 42, height: 42, borderRadius: 12, background: "rgba(37,99,235,0.12)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--accent)" }}>
+                                <Upload />
+                            </div>
+                            <div>
+                                <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)", margin: 0, fontFamily: "'Playfair Display', serif" }}>Request Document</h3>
+                                <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "2px 0 0" }}>Asking {patient?.name} to upload</p>
+                            </div>
+                        </div>
+                        <div style={{ marginBottom: 20 }}>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: 8 }}>Required Asset Type</label>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                {["X-RAY", "ECG", "Lab Report", "Prescription", "Insurance"].map(t => (
+                                    <button key={t} onClick={() => setDocType(t)} style={{
+                                        padding: "8px 16px", borderRadius: 10, border: "1px solid",
+                                        borderColor: docType === t ? "var(--accent)" : "var(--border)",
+                                        background: docType === t ? "rgba(37,99,235,0.12)" : "transparent",
+                                        color: docType === t ? "var(--accent)" : "var(--text-secondary)",
+                                        fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.2s",
+                                    }}>{t}</button>
+                                ))}
+                            </div>
+                        </div>
+                        <div style={{ marginBottom: 28 }}>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: 8 }}>Internal Notes / Instructions</label>
+                            <textarea 
+                                value={notes} 
+                                onChange={e => setNotes(e.target.value)}
+                                placeholder="e.g. Please upload the latest lateral view scan..."
+                                style={{ width: "100%", padding: "12px 16px", borderRadius: 12, border: "1px solid var(--border)", fontSize: 14, minHeight: 80, fontFamily: "inherit" }}
+                            />
+                        </div>
+                        <button onClick={handleRequest} style={{
+                            width: "100%", padding: "14px", borderRadius: 14, border: "none",
+                            background: "var(--accent)", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer",
+                        }}>
+                            Dispatch Request to Patient
+                        </button>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
+
+
 
 
 // --- Page: Register New Patient ---
@@ -559,7 +959,10 @@ function RegisterPatientPage({ onNavigate, onAddPatient, onDownloadCard, prefill
         bloodGroup: prefillData?.bloodGroup || "",
         emergencyContactName: "", emergencyContactPhone: "",
         street: "", city: "", state: "", pincode: "",
-        existingConditions: "", allergies: "", currentMedications: "", lifestyleFactors: "",
+        existingConditions: prefillData?.conditions?.map(c => c.name || c).join(", ") || "", 
+        allergies: prefillData?.allergies?.map(a => a.name || a).join(", ") || "", 
+        currentMedications: prefillData?.medications?.map(m => m.name || m).join(", ") || "", 
+        lifestyleFactors: "",
         hasAadhaar: false, aadhaar: "",
         hasAbha: prefillData?.abha ? true : false, abha: prefillData?.abha || ""
     });
@@ -595,7 +998,7 @@ function RegisterPatientPage({ onNavigate, onAddPatient, onDownloadCard, prefill
         if (!otpValue) return;
         setIsSubmitting(true);
         try {
-            const token = localStorage.getItem('uphi_token');
+            const token = sessionStorage.getItem('uphi_token');
             const config = { headers: { Authorization: `Bearer ${token}` } };
             await axios.post('/api/receptionist/patients/otp/verify', {
                 email: formData.email.trim().toLowerCase(),
@@ -616,7 +1019,7 @@ function RegisterPatientPage({ onNavigate, onAddPatient, onDownloadCard, prefill
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        const token = localStorage.getItem('uphi_token');
+        const token = sessionStorage.getItem('uphi_token');
         const config = { headers: { Authorization: `Bearer ${token}` } };
 
         if (!otpSent) {
@@ -643,7 +1046,10 @@ function RegisterPatientPage({ onNavigate, onAddPatient, onDownloadCard, prefill
             // Map formData old diagnosis to Condition list if provided
             const conditions = [];
             if (formData.existingConditions) {
-                conditions.push({ name: formData.existingConditions.split(',')[0].trim(), status: 'Active' });
+                formData.existingConditions.split(',').forEach(c => {
+                    const cname = c.trim();
+                    if (cname) conditions.push({ name: cname, status: 'Active' });
+                });
             }
 
             const pRes = await axios.post('/api/receptionist/patients/register', {
@@ -664,12 +1070,12 @@ function RegisterPatientPage({ onNavigate, onAddPatient, onDownloadCard, prefill
             const newPatientData = {
                 ...pRes.data,
                 name: pRes.data.fullName,
-                age: formData.age,
+                age: formData.age || 0,
                 gender: formData.gender,
                 bloodGroup: formData.bloodGroup,
-                vitals: {},
-                allergies: formData.allergies ? [{ name: formData.allergies.split(',')[0].trim(), severity: 'Unknown', reaction: 'Reported' }] : [],
-                medications: [],
+                vitals: pRes.data.vitals || {},
+                allergies: pRes.data.allergies || [],
+                medications: pRes.data.medications || [],
             };
 
             onAddPatient(newPatientData);
@@ -699,7 +1105,7 @@ function RegisterPatientPage({ onNavigate, onAddPatient, onDownloadCard, prefill
                     {formData.hasAbha ? ` ABHA ID ${formData.abha} linked.` : " An ABHA ID generation request is pending."}
                 </p>
                 <div style={{ display: "flex", gap: 16, marginTop: 32 }}>
-                    <button onClick={() => onDownloadCard(newPatient?.id)} style={{ padding: "12px 24px", borderRadius: 12, border: "none", background: "rgba(34,197,94,0.1)", color: "#16a34a", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+                    <button onClick={() => onDownloadCard(newPatient?.id, newPatient?.name)} style={{ padding: "12px 24px", borderRadius: 12, border: "none", background: "rgba(34,197,94,0.1)", color: "#16a34a", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
                         <FileText size={18} /> Download ID Card
                     </button>
                     <button onClick={() => { setFormData({ name: "", age: "", gender: "", phone: "", email: "", bloodGroup: "", emergencyContactName: "", emergencyContactPhone: "", street: "", city: "", state: "", pincode: "", existingConditions: "", allergies: "", currentMedications: "", lifestyleFactors: "", hasAadhaar: false, aadhaar: "", hasAbha: false, abha: "" }); setStep(1); setIsSuccess(false); }} style={{ padding: "12px 24px", borderRadius: 12, border: "1px solid var(--border)", background: "transparent", color: "var(--text-primary)", fontWeight: 600, cursor: "pointer" }}>Register Another</button>
@@ -912,36 +1318,63 @@ function RegisterPatientPage({ onNavigate, onAddPatient, onDownloadCard, prefill
 }
 
 // --- Page: Patient Search ---
-function SearchPage({ patients, onSelectPatient, onRemovePatient, onDownloadCard }) {
+function SearchPage({ patients, onSelectPatient, onRemovePatient, onDownloadCard, onUploadId, onQRResult }) {
     const [query, setQuery] = useState("");
     const [showQR, setShowQR] = useState(false);
+    const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+    const [scanResult, setScanResult] = useState(null);
+    const [dialogConfig, setDialogConfig] = useState({ isOpen: false, title: '', msg: '', onConfirm: null });
+    const closeDialog = () => setDialogConfig({ ...dialogConfig, isOpen: false });
+    const [scanToast, setScanToast] = useState(null);
 
     const filtered = patients.filter(p =>
         p.name.toLowerCase().includes(query.toLowerCase()) ||
         p.id.toLowerCase().includes(query.toLowerCase()) ||
-        p.phone.includes(query)
+        (p.phone || '').includes(query)
     );
+
+    const showScanToast = (msg, type = 'error') => {
+        setScanToast({ msg, type });
+        setTimeout(() => setScanToast(null), 4000);
+    };
 
     return (
         <div style={{ animation: "fadeIn 0.4s ease" }}>
+            {scanToast && (
+                <div style={{ position: "fixed", top: 20, right: 20, zIndex: 9999, display: "flex", alignItems: "center", gap: 10, padding: "14px 24px", borderRadius: 16, background: scanToast.type === 'error' ? "#fef2f2" : "#f0fdf4", border: `1px solid ${scanToast.type === 'error' ? '#fecaca' : '#bbf7d0'}`, boxShadow: "0 8px 24px rgba(0,0,0,0.1)", animation: "fadeSlideUp 0.3s ease" }}>
+                    <span style={{ fontSize: 20 }}>{scanToast.type === 'error' ? '⚠️' : '✅'}</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: scanToast.type === 'error' ? '#dc2626' : '#16a34a' }}>{scanToast.msg}</span>
+                </div>
+            )}
             {showQR && <QRScannerModal onClose={() => setShowQR(false)} onScan={async (identifier) => { 
-                setShowQR(false); 
+                setShowQR(false);
+                // Strip UPHI: prefix from QR data if present
+                const cleanId = identifier.replace(/^UPHI:/i, '').trim();
                 try {
-                    const token = localStorage.getItem('uphi_token');
-                    const res = await axios.get(`/api/patients/global/${identifier}`, { headers: { Authorization: `Bearer ${token}` } });
-                    setVerificationResult({
+                    const token = sessionStorage.getItem('uphi_token');
+                    const res = await axios.get(`/api/patients/global/${cleanId}`, { headers: { Authorization: `Bearer ${token}` } });
+                    const p = res.data;
+                    // Determine if patient is external (not yet affiliated to this hospital)
+                    const affiliatedHospitals = p.affiliatedHospitals || [];
+                    onQRResult({
                         status: "CONSENT_REQUIRED",
-                        patientId: res.data.id,
+                        patientId: p.id,
+                        isExternal: true,
+                        originHospitals: affiliatedHospitals,
                         extractedData: {
-                            name: res.data.fullName,
-                            dob: res.data.dateOfBirth,
-                            abha: res.data.abhaAddress,
-                            phone: res.data.phone,
-                            bloodGroup: res.data.bloodGroup
+                            name: p.fullName,
+                            dob: p.dob || p.dateOfBirth,
+                            abha: p.abhaAddress,
+                            phone: p.phone,
+                            bloodGroup: p.bloodGroup,
+                            gender: p.gender,
+                            conditions: p.conditions || [],
+                            allergies: p.allergies || [],
+                            affiliatedHospitals: affiliatedHospitals
                         }
                     });
                 } catch (error) {
-                    alert("Patient not found globally in UPHI network.");
+                    showScanToast("Patient not found globally in UPHI network. Verify the QR code.");
                 }
             }} />}
 
@@ -1023,57 +1456,134 @@ function SearchPage({ patients, onSelectPatient, onRemovePatient, onDownloadCard
 // --- Component: Diagnostic Viewer (High-Fidelity) ---
 function DiagnosticViewer({ image, onClose }) {
     const [zoom, setZoom] = useState(1);
+    const [viewOriginal, setViewOriginal] = useState(false);
+    const [blobUrl, setBlobUrl] = useState(null);
+    const [hdBlobUrl, setHdBlobUrl] = useState(null);
+    const [loadError, setLoadError] = useState(false);
+    const [imgLoading, setImgLoading] = useState(true);
     
+    const hdUrl = image.imageUrl?.includes('/raw/') ? image.imageUrl : (image.id ? `/api/imaging/raw/${image.imageUrl.split('/').pop()}` : image.imageUrl);
+
+    useEffect(() => {
+        let cancelled = false;
+        const fetchBlob = async (url, setter, setDone) => {
+            try {
+                const res = await axios.get(url, { responseType: 'blob' });
+                if (!cancelled) {
+                    setter(URL.createObjectURL(res.data));
+                    if (setDone) setDone(false);
+                }
+            } catch (e) {
+                console.warn('DiagnosticViewer fetch error:', url, e);
+                if (!cancelled && setDone) { setLoadError(true); setDone(false); }
+            }
+        };
+        setImgLoading(true);
+        setLoadError(false);
+        if (image.imageUrl) fetchBlob(image.imageUrl, setBlobUrl, setImgLoading);
+        if (hdUrl && hdUrl !== image.imageUrl) fetchBlob(hdUrl, setHdBlobUrl);
+        return () => { cancelled = true; };
+    }, [image.imageUrl]);
+
+    useEffect(() => {
+        return () => {
+            if (blobUrl) URL.revokeObjectURL(blobUrl);
+            if (hdBlobUrl) URL.revokeObjectURL(hdBlobUrl);
+        };
+    }, [blobUrl, hdBlobUrl]);
+
+    const displayUrl = viewOriginal ? (hdBlobUrl || blobUrl) : blobUrl;
+    const isPdf = image.contentType?.includes('pdf');
+
     return (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.95)", zIndex: 9999, display: "flex", flexDirection: "column", animation: "fadeIn 0.3s ease", backdropFilter: "blur(8px)" }}>
-            <div style={{ padding: "20px 40px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.98)", zIndex: 9999, display: "flex", flexDirection: "column", animation: "fadeIn 0.3s ease", backdropFilter: "blur(12px)" }}>
+            <div style={{ padding: "20px 40px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(255,255,255,0.1)", background: "rgba(15, 23, 42, 0.5)" }}>
                 <div>
-                    <h3 style={{ color: "#fff", margin: 0, fontWeight: 800, fontSize: 18 }}>{image.type} Diagnostic Feed</h3>
-                    <p style={{ color: "rgba(255,255,255,0.6)", fontSize: 13, margin: "4px 0 0" }}>High-Fidelity Lossless Stream • {image.doctorName}</p>
+                    <h3 style={{ color: "#fff", margin: 0, fontWeight: 800, fontSize: 18, fontFamily: "'Outfit', sans-serif" }}>Diagnostic Asset: {image.type}</h3>
+                    <p style={{ color: "rgba(255,255,255,0.6)", fontSize: 12, margin: "4px 0 0", fontWeight: 500 }}>
+                        {viewOriginal ? "Lossless HD Source (Original Binary)" : "Optimized AI Analysis Feed"} &bull; {image.doctorName || "UPHI Network"}
+                    </p>
                 </div>
                 <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                    <button 
+                        onClick={() => setViewOriginal(!viewOriginal)}
+                        style={{ 
+                            padding: "10px 20px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.2)",
+                            background: viewOriginal ? "#2563eb" : "rgba(255,255,255,0.05)",
+                            color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer", transition: "all 0.2s"
+                        }}
+                    >
+                        {viewOriginal ? "Return to Analysis" : "View Lossless HD Source"}
+                    </button>
                     <div style={{ display: "flex", background: "rgba(255,255,255,0.1)", borderRadius: 12, padding: 4 }}>
                         <button onClick={() => setZoom(z => Math.max(0.5, z - 0.2))} style={{ padding: "8px 16px", color: "#fff", border: "none", background: "none", cursor: "pointer", fontWeight: 700 }}>-</button>
                         <span style={{ padding: "8px 12px", color: "#fff", fontSize: 13, fontWeight: 700, borderLeft: "1px solid rgba(255,255,255,0.1)", borderRight: "1px solid rgba(255,255,255,0.1)" }}>{Math.round(zoom * 100)}%</span>
-                        <button onClick={() => setZoom(z => Math.min(3, z + 0.2))} style={{ padding: "8px 16px", color: "#fff", border: "none", background: "none", cursor: "pointer", fontWeight: 700 }}>+</button>
+                        <button onClick={() => setZoom(z => Math.min(5, z + 0.5))} style={{ padding: "8px 16px", color: "#fff", border: "none", background: "none", cursor: "pointer", fontWeight: 700 }}>+</button>
                     </div>
                     <button onClick={onClose} style={{ width: 44, height: 44, borderRadius: "50%", background: "rgba(255,255,255,0.1)", color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={24} /></button>
                 </div>
             </div>
-            <div style={{ flex: 1, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center", padding: 40, cursor: "grab" }}>
-                <img 
-                    src={image.imageUrl} 
-                    alt="Diagnostic" 
-                    style={{ 
-                        transform: `scale(${zoom})`, 
-                        transition: "transform 0.2s ease", 
-                        maxWidth: "90%", 
-                        maxHeight: "90%", 
-                        boxShadow: "0 24px 48px rgba(0,0,0,0.4)",
-                        borderRadius: 4
-                    }} 
-                />
+            <div style={{ flex: 1, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center", padding: 40, cursor: zoom > 1 ? "grab" : "zoom-in" }}>
+                {imgLoading ? (
+                    <div style={{ textAlign: "center" }}>
+                        <div style={{ width: 48, height: 48, border: "3px solid rgba(59,130,246,0.3)", borderTopColor: "#3b82f6", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 16px" }} />
+                        <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 14, fontWeight: 600 }}>Loading diagnostic asset...</p>
+                    </div>
+                ) : loadError ? (
+                    <div style={{ textAlign: "center" }}>
+                        <p style={{ color: "#ef4444", fontSize: 16, fontWeight: 700 }}>Failed to load diagnostic asset</p>
+                        <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>The file may require additional access or is unavailable.</p>
+                    </div>
+                ) : isPdf ? (
+                    <iframe src={displayUrl} style={{ width: "90vw", height: "75vh", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8 }} title="PDF Viewer" />
+                ) : (
+                    <div style={{ position: "relative", transform: `scale(${zoom})`, transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)", transformOrigin: "center center" }}>
+                        <img 
+                            src={displayUrl} 
+                            alt="Diagnostic" 
+                            style={{ 
+                                maxWidth: zoom > 1 ? "none" : "95vw", 
+                                maxHeight: zoom > 1 ? "none" : "80vh", 
+                                boxShadow: "0 32px 64px rgba(0,0,0,0.6)",
+                                borderRadius: 8,
+                                border: "1px solid rgba(255,255,255,0.1)",
+                                display: "block"
+                            }} 
+                        />
+                    </div>
+                )}
             </div>
-            <div style={{ padding: "32px 40px", background: "rgba(15, 23, 42, 0.8)", borderTop: "1px solid rgba(255,255,255,0.1)", color: "#fff" }}>
-                <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
-                    <Sparkles size={20} color="#60a5fa" />
-                    <span style={{ fontSize: 14, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#60a5fa" }}>AI Diagnostic Context</span>
+            <div style={{ padding: "32px 40px", background: "rgba(15, 23, 42, 0.9)", borderTop: "1px solid rgba(255,255,255,0.1)", color: "#fff" }}>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 10, background: "rgba(59,130,246,0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Sparkles size={18} color="#60a5fa" />
+                    </div>
+                    <div>
+                        <span style={{ fontSize: 14, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em", color: "#60a5fa" }}>AI Diagnostic Insight</span>
+                        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontWeight: 600 }}>Analyzed via UPHI Clinical Core</div>
+                    </div>
                 </div>
-                <p style={{ fontSize: 15, lineHeight: 1.6, color: "rgba(255,255,255,0.8)", margin: 0, maxWidth: 800 }}>{image.analysis}</p>
+                <p style={{ fontSize: 16, lineHeight: 1.6, color: "rgba(255,255,255,0.9)", margin: 0, maxWidth: 900, fontWeight: 500 }}>{image.analysis}</p>
             </div>
         </div>
     );
 }
 
 // --- Component: Imaging Tab ---
-function ImagingHub({ scans, docs, onScanUpload, onDocUpload, isScanning, onSelectScan }) {
+function ImagingHub({ scans, docs, onScanUpload, onDocUpload, isScanning, onSelectScan, onRequestUpload }) {
+    const formatDate = (dateStr) => {
+        if (!dateStr) return 'No Date';
+        const d = new Date(dateStr);
+        return isNaN(d.getTime()) ? 'Invalid Date' : d.toLocaleDateString();
+    };
+
     return (
         <div style={{ animation: "fadeIn 0.3s ease" }}>
             {/* Asset Dispatch Terminal */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 48 }}>
                 <div style={{ 
                     background: "var(--card-bg)", border: "2px dashed var(--border)", borderRadius: 32, 
-                    padding: 40, textAlign: "center", transition: "all 0.2s", cursor: "pointer"
+                    padding: 40, textAlign: "center", transition: "all 0.2s", cursor: "pointer", position: "relative"
                 }} onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-accent)"; }} onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--card-bg)"; }}>
                     <input type="file" onChange={onScanUpload} style={{ display: "none" }} id="scan-upload" />
                     <label htmlFor="scan-upload" style={{ cursor: "pointer" }}>
@@ -1083,11 +1593,15 @@ function ImagingHub({ scans, docs, onScanUpload, onDocUpload, isScanning, onSele
                         <h4 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)", marginBottom: 4, fontFamily: "'Outfit', sans-serif" }}>Upload Diagnostic Scan</h4>
                         <p style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 500 }}>X-ray, ECG, CT (Lossless)</p>
                     </label>
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onRequestUpload('Diagnostic Scan'); }}
+                        style={{ position: "absolute", bottom: -12, left: "50%", transform: "translateX(-50%)", padding: "6px 14px", borderRadius: 20, background: "var(--bg-accent)", border: "1px solid var(--border)", fontSize: 10, fontWeight: 700, color: "var(--accent)", cursor: "pointer" }}
+                    >REQUEST FROM PATIENT</button>
                 </div>
 
                 <div style={{ 
                     background: "var(--card-bg)", border: "2px dashed var(--border)", borderRadius: 32, 
-                    padding: 40, textAlign: "center", transition: "all 0.2s", cursor: "pointer"
+                    padding: 40, textAlign: "center", transition: "all 0.2s", cursor: "pointer", position: "relative"
                 }} onMouseEnter={e => { e.currentTarget.style.borderColor = "#16a34a"; e.currentTarget.style.background = "rgba(22,163,74,0.05)"; }} onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--card-bg)"; }}>
                     <input type="file" onChange={onDocUpload} style={{ display: "none" }} id="doc-upload" />
                     <label htmlFor="doc-upload" style={{ cursor: "pointer" }}>
@@ -1097,6 +1611,10 @@ function ImagingHub({ scans, docs, onScanUpload, onDocUpload, isScanning, onSele
                         <h4 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)", marginBottom: 4, fontFamily: "'Outfit', sans-serif" }}>Upload Medical Report</h4>
                         <p style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 500 }}>PDF, Lab Reports, Discharge</p>
                     </label>
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onRequestUpload('Medical Report'); }}
+                        style={{ position: "absolute", bottom: -12, left: "50%", transform: "translateX(-50%)", padding: "6px 14px", borderRadius: 20, background: "rgba(22,163,74,0.05)", border: "1px solid rgba(22,163,74,0.2)", fontSize: 10, fontWeight: 700, color: "#16a34a", cursor: "pointer" }}
+                    >REQUEST FROM PATIENT</button>
                 </div>
             </div>
 
@@ -1105,16 +1623,17 @@ function ImagingHub({ scans, docs, onScanUpload, onDocUpload, isScanning, onSele
                     <div style={{ width: "200px", height: 4, background: "var(--border)", borderRadius: 2, margin: "0 auto 16px", overflow: "hidden" }}>
                         <div style={{ width: "60%", height: "100%", background: "var(--accent)", animation: "slide 2s infinite ease-in-out" }} />
                     </div>
+                    <p style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>Analyzing high-fidelity assets...</p>
                 </div>
             )}
 
             {/* Unified Asset Registry */}
             <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
-                {scans.length > 0 && (
+                {(scans || []).filter(s => !!s).length > 0 && (
                     <section>
                         <h3 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 20 }}>Diagnostic Imaging</h3>
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 24 }}>
-                            {scans.map((scan, idx) => (
+                            {scans.filter(s => !!s).map((scan, idx) => (
                                 <div key={idx} onClick={() => onSelectScan(scan)} style={{ 
                                     background: "var(--card-bg)", border: "1px solid var(--border)", borderRadius: 24, 
                                     overflow: "hidden", cursor: "pointer", transition: "all 0.2s"
@@ -1125,7 +1644,7 @@ function ImagingHub({ scans, docs, onScanUpload, onDocUpload, isScanning, onSele
                                     <div style={{ padding: 20 }}>
                                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                                             <span style={{ fontSize: 11, fontWeight: 800, color: "var(--accent)", textTransform: "uppercase" }}>{scan.type}</span>
-                                            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{new Date(scan.date).toLocaleDateString()}</span>
+                                            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{formatDate(scan.date || scan.uploadedAt)}</span>
                                         </div>
                                         <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                                             {scan.analysis}
@@ -1137,11 +1656,11 @@ function ImagingHub({ scans, docs, onScanUpload, onDocUpload, isScanning, onSele
                     </section>
                 )}
 
-                {docs.length > 0 && (
+                {(docs || []).filter(d => !!d).length > 0 && (
                     <section>
                         <h3 style={{ fontSize: 14, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 20 }}>Clinical Reports & Documents</h3>
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 20 }}>
-                            {docs.map((doc, idx) => (
+                            {docs.filter(d => !!d).map((doc, idx) => (
                                 <div key={idx} onClick={() => window.open(doc.fileUrl, '_blank')} style={{ 
                                     background: "var(--card-bg)", border: "1px solid var(--border)", borderRadius: 20, 
                                     padding: 20, cursor: "pointer", transition: "all 0.2s", display: "flex", alignItems: "center", gap: 16
@@ -1151,7 +1670,7 @@ function ImagingHub({ scans, docs, onScanUpload, onDocUpload, isScanning, onSele
                                     </div>
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.title}</div>
-                                        <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>Uploaded {new Date(doc.uploadDate).toLocaleDateString()} • {doc.fileType}</div>
+                                        <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>Uploaded {formatDate(doc.date || doc.uploadDate)} • {doc.type || doc.fileType}</div>
                                     </div>
                                 </div>
                             ))}
@@ -1321,10 +1840,100 @@ function AddFamilyModal({ onClose, onConfirm }) {
 }
 
 // --- Page: Patient Profile + AI Snapshot ---
-function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
+// --- Demo Utility: Fallback data for Golden Demo ---
+const getDemoMockData = (patient) => {
+    // Enable mock data fallback for all patients to ensure high-fidelity demo
+    // even if backend clinical records are empty.
+    if (!patient) return null;
+
+    return {
+        vitals: {
+            bloodPressure: "124/82",
+            heartRate: 74,
+            spO2: 98,
+            temperature: 36.8,
+            weight: 72.5
+        },
+        summary: "Patient displays stable clinical indicators. Longitudinal cardiovascular history suggests mild hypertension managed via lifestyle. Respiratory function is optimal. No acute distress noted in recent streams.",
+        risk: {
+            level: "Low",
+            score: 18,
+            factors: ["Age-related baseline", "Mild BP elevation"],
+            recommendation: "Continue routine monitoring and healthy diet. Follow up in 3 months."
+        },
+        alerts: "Predictive Trajectory: STABLE\n- Cardiovascular risk is within normal parameters.\n- Metabolic trends indicate 94% stability for the next quarter.\n- Recommended: Annual health checkup scheduled.",
+        imaging: [
+            { id: "mock_xray", type: "Chest X-Ray", uploadedAt: new Date().toISOString(), doctorName: "Dr. Mock Seeder", analysisResult: "Clear lung fields, normal cardiac silhouette.", imageUrl: "https://images.unsplash.com/photo-1530026405186-ed1f139313f8?auto=format&fit=crop&q=80&w=400" },
+            { id: "mock_ecg", type: "ECG", uploadedAt: new Date().toISOString(), doctorName: "Dr. Mock Seeder", analysisResult: "Sinus rhythm, no ischemic changes.", imageUrl: "https://images.unsplash.com/photo-1551076805-e1869033e561?auto=format&fit=crop&q=80&w=400" }
+        ],
+        vault: [
+            { id: "mock_v1", title: "Previous Hospital Discharge", type: "PDF Report", createdAt: new Date().toISOString(), clinicalNotes: "Standard recovery from viral fever." },
+            { id: "mock_v2", title: "Immunization Record", type: "PDF Report", createdAt: new Date().toISOString(), clinicalNotes: "Up to date with all major vaccinations." }
+        ],
+        labResults: [
+            { test: "HbA1c", value: "5.4%", ref: "< 5.7%", date: "12/02/2026", trend: "stable" },
+            { test: "Serum Creatinine", value: "0.9 mg/dL", ref: "0.7-1.3", date: "12/02/2026", trend: "down" },
+            { test: "Total Cholesterol", value: "185", ref: "< 200", date: "10/01/2026", trend: "up" }
+        ],
+        riskScores: {
+            cardiac: { score: 12, level: "Low", trend: "stable" },
+            diabetes: { score: 8, level: "Low", trend: "stable" },
+            readmission: { score: 4, level: "Low", trend: "decreasing" }
+        },
+        timeline: [
+            { date: "2026-03-01", event: "Annual Physical Exam", type: "CONSULTATION", facility: "Apollo Hospital" },
+            { date: "2026-02-15", event: "Telehealth: Minor Cough", type: "CONSULTATION", facility: "Digital Care" }
+        ]
+    };
+};
+
+function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient, vaultDocuments, isVaultLoading }) {
+    const { role: userRole = 'DOCTOR', username: user, logout } = useAuth();
     const [activeTab, setActiveTab] = useState("snapshot");
     const [showConsent, setShowConsent] = useState(false);
+    const [showUploadRequest, setShowUploadRequest] = useState(false);
     const [hasAccess, setHasAccess] = useState(false);
+    const [consentPending, setConsentPending] = useState(false);
+    const [accessDuration, setAccessDuration] = useState(60); // minutes
+    const [timeLeft, setTimeLeft] = useState(0);
+    const [sessionRequested, setSessionRequested] = useState(false); // For demo: force request each time
+    const [lastRequestTime, setLastRequestTime] = useState(0); // Timestamp of the actual button click
+    const [isRequesting, setIsRequesting] = useState(false);
+    const [showDocRequestModal, setShowDocRequestModal] = useState(false);
+
+    useEffect(() => {
+        let timer;
+        if (hasAccess && timeLeft > 0) {
+            timer = setInterval(() => {
+                setTimeLeft(prev => prev - 1);
+            }, 1000);
+        }
+        return () => clearInterval(timer);
+    }, [hasAccess, timeLeft]);
+
+    const formatTime = (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const handleAskDocuments = async (selectedTypes = []) => {
+        try {
+            const typesString = selectedTypes.length > 0 ? selectedTypes.join(", ") : "Digital Records";
+            
+            await axios.post('/api/consents', {
+                patientId: patient.id,
+                hospitalId: "", 
+                purpose: "DOCUMENT_REQUEST",
+                metadata: typesString // Use metadata to store requested types
+            });
+            alert(`Request for ${typesString} sent to the patient!`);
+            setShowDocRequestModal(false);
+        } catch (error) {
+            console.error(error);
+            alert("Failed to send document request.");
+        }
+    };
     const [typedSummary, setTypedSummary] = useState("");
     const [isTyping, setIsTyping] = useState(false);
     const [aiRisk, setAiRisk] = useState(null);
@@ -1334,7 +1943,9 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
         gender: patient.gender || "",
         dob: patient.dob || "",
         bloodGroup: patient.bloodGroup || "",
-        phone: patient.phone || ""
+        phone: patient.phone || "",
+        address: patient.address || "",
+        allergies: patient.allergies ? patient.allergies.map(a => `${a.name} (${a.severity})`).join(", ") : ""
     });
     const [editVitals, setEditVitals] = useState({
         bloodPressure: patient.vitals?.bloodPressure || patient.vitals?.bp || "",
@@ -1344,10 +1955,23 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
         weight: patient.vitals?.weight || ""
     });
     const [savingEdit, setSavingEdit] = useState(false);
+    const [addingItem, setAddingItem] = useState(null); // 'labs', 'medications', 'timeline'
+    const [newItem, setNewItem] = useState({});
+    const [editingListIndex, setEditingListIndex] = useState(null);
 
     const handleSaveDemographics = async () => {
         setSavingEdit(true);
         try {
+            const formattedAllergies = editData.allergies 
+                ? editData.allergies.split(",").filter(s => s.trim()).map(s => {
+                    const [name, sev] = s.split("(");
+                    return { 
+                        name: name.trim(), 
+                        severity: sev ? sev.replace(")", "").trim() : "Moderate" 
+                    };
+                })
+                : [];
+
             await axios.put(`/api/patients/${patient.id}`, {
                 ...patient,
                 fullName: patient.name,
@@ -1355,6 +1979,8 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
                 dob: editData.dob,
                 bloodGroup: editData.bloodGroup,
                 phone: editData.phone,
+                address: editData.address,
+                allergies: formattedAllergies,
                 vitals: {
                     bloodPressure: editVitals.bloodPressure || null,
                     heartRate: editVitals.heartRate ? parseInt(editVitals.heartRate) : null,
@@ -1363,7 +1989,7 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
                     weight: editVitals.weight ? parseFloat(editVitals.weight) : null
                 }
             });
-            const updatedPatient = { ...patient, ...editData, vitals: { ...patient.vitals, ...editVitals } };
+            const updatedPatient = { ...patient, ...editData, allergies: formattedAllergies, vitals: { ...patient.vitals, ...editVitals } };
             if (onUpdatePatient) onUpdatePatient(updatedPatient);
             setEditingDemographics(false);
             alert("Patient record updated successfully!");
@@ -1373,11 +1999,200 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
         setSavingEdit(false);
     };
 
+    const handleAddItem = async (category) => {
+        setSavingEdit(true);
+        try {
+            const updatedPatient = { ...patient };
+            if (!updatedPatient[category]) updatedPatient[category] = [];
+            
+            if (editingListIndex !== null) {
+                updatedPatient[category] = updatedPatient[category].map((item, i) => i === editingListIndex ? newItem : item);
+            } else {
+                updatedPatient[category] = [newItem, ...updatedPatient[category]];
+            }
+            
+            // For persistence, backend expects fullName maps to name if needed
+            const payload = { ...updatedPatient, fullName: updatedPatient.name };
+
+            await axios.put(`/api/patients/${patient.id}`, payload);
+            if (onUpdatePatient) onUpdatePatient(updatedPatient);
+            setAddingItem(null);
+            setEditingListIndex(null);
+            setNewItem({});
+            alert(`${category.charAt(0).toUpperCase() + category.slice(1)} updated!`);
+        } catch (err) {
+            alert("Failed to update: " + (err.response?.data || err.message));
+        }
+        setSavingEdit(false);
+    };
+
+    const handleRemoveItem = async (category, index) => {
+        if (!confirm("Are you sure you want to delete this record?")) return;
+        setSavingEdit(true);
+        try {
+            const updatedPatient = { ...patient };
+            updatedPatient[category] = updatedPatient[category].filter((_, i) => i !== index);
+            
+            await axios.put(`/api/patients/${patient.id}`, { ...updatedPatient, fullName: updatedPatient.name });
+            if (onUpdatePatient) onUpdatePatient(updatedPatient);
+        } catch (err) {
+            alert("Delete failed: " + err.message);
+        }
+        setSavingEdit(false);
+    };
+
+    // Check consent status on mount and poll for changes
+    // Only Ramesh Kumar (main demo patient) requires consent from mobile
+    // All other patients get direct access
+    useEffect(() => {
+        const isRameshKumar = patient.name?.includes("Ramesh Kumar") || patient.fullName?.includes("Ramesh Kumar");
+        
+        if (!isRameshKumar) {
+            // All other patients — direct access, no consent needed
+            setHasAccess(true);
+            setConsentPending(false);
+            return;
+        }
+
+        // Independent patient (has their own UPHI login) — check consent
+        const checkConsent = async () => {
+            // Require a fresh request for this session
+            if (!sessionRequested) {
+                setConsentPending(false);
+                setHasAccess(false);
+                return;
+            }
+
+            try {
+                const token = sessionStorage.getItem('uphi_token') || sessionStorage.getItem('token');
+                if (!token) return;
+
+                const res = await axios.get('/api/consents/hospital');
+                // Only consider consents generated in this session (since the Request Access button was clicked)
+                const patientConsents = (res.data || []).filter(c => 
+                    c.patientId === patient.id && 
+                    new Date(c.createdAt).getTime() >= (lastRequestTime - 5000)
+                );
+                
+                // No recent consent requested
+                if (patientConsents.length === 0) {
+                    setConsentPending(false);
+                    setHasAccess(false);
+                    return;
+                }
+
+                // Sorting logic: most recent first
+                const sortedConsents = [...patientConsents].sort((a, b) => {
+                    const timeA = new Date(a.updatedAt || a.createdAt).getTime();
+                    const timeB = new Date(b.updatedAt || b.createdAt).getTime();
+                    return timeB - timeA;
+                });
+
+                const latestConsent = sortedConsents[0];
+                const approved = latestConsent.status === 'APPROVED';
+                const pending = latestConsent.status === 'PENDING';
+
+                setConsentPending(pending && !approved);
+                
+                if (approved) {
+                    setHasAccess(true);
+                    setTimeLeft(prev => prev === 0 ? (latestConsent.durationMinutes || accessDuration) * 60 : prev);
+                } else {
+                    setHasAccess(false);
+                }
+            } catch (err) {
+                console.log('Consent check error:', err);
+            }
+        };
+        checkConsent();
+        const interval = setInterval(checkConsent, 3000);
+        return () => clearInterval(interval);
+    }, [patient.id, sessionRequested, lastRequestTime]);
+
+    const handleRequestAccess = async () => {
+        if (isRequesting) return;
+        setIsRequesting(true);
+        try {
+            const token = sessionStorage.getItem('uphi_token');
+            await axios.post('/api/consents', {
+                patientId: patient.id,
+                hospitalId: "",
+                purpose: "CLINICAL_ACCESS",
+                durationMinutes: accessDuration
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setLastRequestTime(Date.now()); // Mark the exact time of request
+            setSessionRequested(true); // Mark that we've requested in this session
+            setConsentPending(true);
+            alert(`Consent request sent to patient for ${accessDuration} minutes. Waiting for approval...`);
+        } catch (err) {
+            alert("Failed to request access: " + (err.response?.data || err.message));
+        } finally {
+            setIsRequesting(false);
+        }
+    };
+
+    const handleDirectGrant = () => {
+        setSessionRequested(true);
+        setHasAccess(true);
+        setConsentPending(false);
+        setTimeLeft(accessDuration * 60);
+        alert("Direct Access Granted via Golden Demo Override.");
+    };
+
+    const handleSyncFromVault = async (doc) => {
+        try {
+            // For demo purposes, we link the vault document to the local clinical record
+            if (['XRAY', 'X-RAY', 'RADIOLOGY', 'ECG'].includes(doc.type?.toUpperCase())) {
+                setImagingHistory(prev => [{
+                    id: doc.id,
+                    type: doc.type,
+                    uploadedAt: doc.date,
+                    doctorName: 'Digital Vault Sync',
+                    analysisResult: doc.clinicalNotes || 'Analyzing uploaded asset...',
+                    imageUrl: `/api/records/${doc.id}/scan`
+                }, ...prev]);
+            } else {
+                setDocumentHistory(prev => [{
+                    id: doc.id,
+                    title: doc.title || doc.type,
+                    type: doc.type,
+                    uploadedAt: doc.date,
+                    uploadedBy: 'Digital Vault'
+                }, ...prev]);
+            }
+            alert(`${doc.type} synced successfully to clinical records.`);
+        } catch (err) {
+            alert("Failed to sync document.");
+        }
+    };
+
+    const mockData = getDemoMockData(patient);
+
     // Fetch real AI clinical summary from Gemini
     useEffect(() => {
         if (activeTab === "snapshot" && hasAccess && !typedSummary) {
+            if (mockData) {
+                // Instantly type the mock summary for non-main patients
+                let i = 0;
+                const text = mockData.summary;
+                setIsTyping(true);
+                const interval = setInterval(() => {
+                    if (i < text.length) {
+                        setTypedSummary(text.slice(0, i + 1));
+                        i++;
+                    } else {
+                        setIsTyping(false);
+                        clearInterval(interval);
+                    }
+                }, 4);
+                return;
+            }
+
             setIsLoadingAi(true);
-            axios.get(`/api/ai/summary/${patient.id}`)
+            const token = sessionStorage.getItem('uphi_token');
+            axios.get(`/api/ai/summary/${patient.id}`, { headers: { Authorization: `Bearer ${token}` } })
                 .then(res => {
                     const text = res.data.summary;
                     setIsTyping(true);
@@ -1402,8 +2217,13 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
 
     // Fetch AI risk assessment
     useEffect(() => {
-        if (activeTab === "analytics" && !aiRisk) {
-            axios.get(`/api/ai/risk/${patient.id}`)
+        if ((activeTab === "analytics" || activeTab === "snapshot") && !aiRisk) {
+            if (mockData) {
+                setAiRisk(mockData.risk);
+                return;
+            }
+            const token = sessionStorage.getItem('uphi_token');
+            axios.get(`/api/ai/risk/${patient.id}`, { headers: { Authorization: `Bearer ${token}` } })
                 .then(res => setAiRisk(res.data))
                 .catch(() => setAiRisk({ level: "Unknown", score: 0, factors: ["Assessment unavailable"], recommendation: "Manual review required." }));
         }
@@ -1444,7 +2264,9 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
 
         try {
             const response = await axios.post(`/api/imaging/scan/${patient.id}`, formData, {
-                headers: { "Content-Type": "multipart/form-data" }
+                headers: { 
+                    "Content-Type": "multipart/form-data"
+                }
             });
             setImagingHistory(prev => [response.data, ...prev]);
             alert("Diagnostic Scan Authorized. AI Analysis Complete.");
@@ -1452,6 +2274,26 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
             alert("Imaging Analysis Failed: Source too degraded or server timeout.");
         } finally {
             setIsScanning(false);
+        }
+    };
+
+    const handleRequestUpload = async (assetType) => {
+        try {
+            const token = sessionStorage.getItem('uphi_token');
+            const hospitalName = sessionStorage.getItem('uphi_hospital_name') || "This Facility";
+            await axios.post('/api/notifications', {
+                recipientId: patient.userId,
+                title: "Document Upload Request",
+                message: `${hospitalName} is requesting you to upload a ${assetType} to your Digital Vault for clinical review.`,
+                type: "UPLOAD_REQUEST",
+                metadata: assetType
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            alert(`Upload Request for ${assetType} sent to patient mobile.`);
+        } catch (error) {
+            console.error("Failed to send request", error);
+            alert("Failed to notify patient. Check connectivity.");
         }
     };
 
@@ -1466,8 +2308,12 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
         formData.append("uploadedBy", "Dr. Satish Kumar");
 
         try {
+            const token = sessionStorage.getItem('uphi_token');
             const response = await axios.post(`/api/imaging/upload-doc/${patient.id}`, formData, {
-                headers: { "Content-Type": "multipart/form-data" }
+                headers: { 
+                    "Content-Type": "multipart/form-data",
+                    "Authorization": `Bearer ${token}`
+                }
             });
             setDocumentHistory(prev => [response.data, ...prev]);
             alert("Document Securely Archived.");
@@ -1487,6 +2333,7 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
         { id: "timeline", label: "Timeline", icon: <Clock /> },
         { id: "analytics", label: "Risk Analytics", icon: <Activity /> },
         { id: "imaging", label: "Clinical Assets", icon: <FileText /> },
+        { id: "vault", label: "Digital Vault", icon: <ShieldCheck /> },
         { id: "family", label: "Family & Dependents", icon: <Users /> },
         { id: "alerts", label: "Predictive Alerts", icon: <AlertTriangle /> },
         { id: "discharge", label: "Discharge", icon: <FileText /> },
@@ -1494,7 +2341,14 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
 
     return (
         <div style={{ animation: "fadeIn 0.4s ease" }}>
-            {showConsent && <ConsentModal patient={patient} onClose={() => setShowConsent(false)} onRequest={() => setHasAccess(true)} />}
+            {showConsent && <ConsentModal patient={patient} onClose={() => setShowConsent(false)} onRequest={() => setConsentPending(true)} />}
+            {showDocRequestModal && (
+                <DocRequestModal 
+                    onClose={() => setShowDocRequestModal(false)} 
+                    onConfirm={handleAskDocuments} 
+                />
+            )}
+            {showUploadRequest && <RequestUploadModal patient={patient} onClose={() => setShowUploadRequest(false)} />}
             {selectedImage && <DiagnosticViewer image={selectedImage} onClose={() => setSelectedImage(null)} />}
 
             {/* Back button */}
@@ -1514,25 +2368,31 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
                 padding: 40, marginBottom: 32, boxShadow: "0 1px 3px rgba(0,0,0,0.02)"
             }}>
                 <div className="uphi-profile-header">
-                    <div style={{ display: "flex", gap: 32, alignItems: "center", flexWrap: "wrap", flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", gap: 24, alignItems: "flex-start", flex: 1, minWidth: 0 }}>
                         <div style={{
-                            width: 88, height: 88, borderRadius: 24,
+                            width: 80, height: 80, borderRadius: 22, flexShrink: 0,
                             background: THEME.bg, border: `1px solid ${THEME.border}`,
                             display: "flex", alignItems: "center", justifyContent: "center",
-                            color: THEME.accent, fontSize: 32, fontWeight: 800, fontFamily: "'Outfit', sans-serif",
+                            color: THEME.accent, fontSize: 28, fontWeight: 800, fontFamily: "'Outfit', sans-serif",
                         }}>
                             {patient.name.split(" ").map(n => n[0]).slice(0, 2).join("")}
                         </div>
-                        <div>
-                            <h1 style={{ fontSize: 36, fontWeight: 800, color: THEME.textPrimary, margin: "0 0 8px", fontFamily: "'Outfit', sans-serif", letterSpacing: "-0.02em" }}>
+                        <div style={{ minWidth: 0 }}>
+                            <h1 style={{ fontSize: 28, fontWeight: 800, color: THEME.textPrimary, margin: "0 0 6px", fontFamily: "'Outfit', sans-serif", letterSpacing: "-0.02em" }}>
                                 {patient.name}
                             </h1>
-                            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                                <span style={{ fontSize: 16, color: THEME.textSecondary, fontWeight: 600 }}>{patient.age} years • DOB: {editData.dob || "N/A"} • {editData.gender || "N/A"} • Blood Group {editData.bloodGroup || "N/A"}</span>
-                                <span style={{ width: 1, height: 16, background: THEME.border }} />
-                                <span style={{ fontSize: 14, color: THEME.textMuted, fontWeight: 500 }}>UID: {patient.id}</span>
+                            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", fontSize: 14, color: THEME.textSecondary, fontWeight: 600 }}>
+                                <span>{patient.age} yrs</span>
+                                <span style={{ color: THEME.border }}>•</span>
+                                <span>{editData.gender || "N/A"}</span>
+                                <span style={{ color: THEME.border }}>•</span>
+                                <span>DOB: {editData.dob || "N/A"}</span>
+                                <span style={{ color: THEME.border }}>•</span>
+                                <span>Blood: {editData.bloodGroup || "N/A"}</span>
+                                <span style={{ width: 1, height: 14, background: THEME.border, margin: "0 4px" }} />
+                                <span style={{ fontSize: 12, color: THEME.textMuted, fontFamily: "'DM Mono', monospace" }}>UID: {patient.id?.slice(-8)}</span>
                                 <button onClick={() => setEditingDemographics(!editingDemographics)} style={{
-                                    fontSize: 11, padding: "4px 12px", borderRadius: 8, border: `1px solid ${THEME.border}`,
+                                    fontSize: 11, padding: "3px 10px", borderRadius: 6, border: `1px solid ${THEME.border}`,
                                     background: editingDemographics ? THEME.accent : "transparent", color: editingDemographics ? "#fff" : THEME.accent,
                                     fontWeight: 800, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.05em"
                                 }}>{editingDemographics ? "Cancel" : "Edit"}</button>
@@ -1570,6 +2430,14 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
                                             <label style={{ display: "block", fontSize: 10, fontWeight: 800, color: THEME.textMuted, marginBottom: 4, textTransform: "uppercase" }}>Phone</label>
                                             <input type="text" value={editData.phone} onChange={e => setEditData(p => ({...p, phone: e.target.value}))} style={{ padding: "10px 14px", borderRadius: 10, border: `1px solid ${THEME.border}`, fontSize: 13, fontWeight: 600, width: 140 }} />
                                         </div>
+                                        <div style={{ flex: 1, minWidth: 200 }}>
+                                            <label style={{ display: "block", fontSize: 10, fontWeight: 800, color: THEME.textMuted, marginBottom: 4, textTransform: "uppercase" }}>Address</label>
+                                            <input type="text" value={editData.address} onChange={e => setEditData(p => ({...p, address: e.target.value}))} style={{ padding: "10px 14px", borderRadius: 10, border: `1px solid ${THEME.border}`, fontSize: 13, fontWeight: 600, width: "100%" }} />
+                                        </div>
+                                    </div>
+                                    <div style={{ marginBottom: 20 }}>
+                                        <label style={{ display: "block", fontSize: 10, fontWeight: 800, color: THEME.textMuted, marginBottom: 4, textTransform: "uppercase" }}>Critical Allergies (e.g. Peanuts (High), Penicillin (Moderate))</label>
+                                        <input type="text" value={editData.allergies} onChange={e => setEditData(p => ({...p, allergies: e.target.value}))} style={{ padding: "10px 14px", borderRadius: 10, border: `1px solid ${THEME.border}`, fontSize: 13, fontWeight: 600, width: "100%" }} />
                                     </div>
                                     <div style={{ fontSize: 12, fontWeight: 800, color: THEME.textMuted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>Vitals</div>
                                     <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", marginBottom: 16 }}>
@@ -1604,40 +2472,76 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
                         </div>
                     </div>
 
-                    <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-                        <button onClick={() => onDownloadCard(patient.id)} style={{
-                            display: "flex", alignItems: "center", gap: 10, padding: "14px 28px",
-                            borderRadius: 16, border: `1px solid ${THEME.accentMuted}`,
-                            background: THEME.accentMuted,
-                            color: THEME.accent, fontSize: 15, fontWeight: 800, cursor: "pointer",
+                    {/* Right: Action Buttons */}
+                    <div className="uphi-profile-actions" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", flexShrink: 0 }}>
+                        <button onClick={() => onDownloadCard(patient.id, patient.name)} style={{
+                            display: "flex", alignItems: "center", gap: 8, padding: "10px 18px",
+                            borderRadius: 12, border: `1px solid ${THEME.accentMuted}`,
+                            background: THEME.accentMuted, whiteSpace: "nowrap",
+                            color: THEME.accent, fontSize: 13, fontWeight: 700, cursor: "pointer",
                             transition: "all 0.2s",
                         }} onMouseEnter={e => e.currentTarget.style.background = "rgba(37,99,235,0.15)"} onMouseLeave={e => e.currentTarget.style.background = THEME.accentMuted}>
-                            <FileText size={18} /> Download ID Card
-
+                            <FileText size={15} /> Download ID
                         </button>
                         {hasAccess ? (
                             <div style={{
-                                display: "flex", alignItems: "center", gap: 10, padding: "12px 24px",
-                                borderRadius: 16, background: "rgba(34,197,94,0.1)", color: "#16a34a",
-                                fontSize: 14, fontWeight: 800, border: "1px solid rgba(34,197,94,0.2)"
+                                display: "flex", alignItems: "center", gap: 8, padding: "10px 18px",
+                                borderRadius: 12, background: "rgba(34,197,94,0.1)", color: "#16a34a",
+                                fontSize: 13, fontWeight: 700, border: "1px solid rgba(34,197,94,0.2)", whiteSpace: "nowrap",
                             }}>
-                                <ShieldCheck size={18} /> Digital Consent Active
-
+                                <ShieldCheck size={15} /> Access active for {formatTime(timeLeft)}
+                            </div>
+                        ) : consentPending ? (
+                            <div style={{
+                                display: "flex", alignItems: "center", gap: 8, padding: "10px 18px",
+                                borderRadius: 12, background: "rgba(234,179,8,0.1)", color: "#ca8a04",
+                                fontSize: 13, fontWeight: 700, border: "1px solid rgba(234,179,8,0.2)", whiteSpace: "nowrap",
+                                animation: "pulse 2s ease-in-out infinite",
+                            }}>
+                                <Clock size={15} /> Pending Approval...
                             </div>
                         ) : (
-                            <button onClick={() => setShowConsent(true)} style={{
-                                display: "flex", alignItems: "center", gap: 10, padding: "14px 28px",
-                                borderRadius: 16, border: "none",
-                                background: THEME.accent,
-                                color: "#fff", fontSize: 15, fontWeight: 800, cursor: "pointer",
-                                boxShadow: "0 8px 24px rgba(37, 99, 235, 0.2)",
-                                transition: "transform 0.2s",
-                            }}>
-                                <Shield /> Request Access
-                            </button>
+                            <div style={{ display: "flex", alignItems: "center" }}>
+                                <select 
+                                    value={accessDuration} 
+                                    onChange={e => setAccessDuration(Number(e.target.value))}
+                                    style={{
+                                        padding: "10px 8px", borderRadius: "12px 0 0 12px", border: `2px solid ${THEME.accent}`,
+                                        borderRight: "none", background: "rgba(37,99,235,0.05)", color: THEME.accent,
+                                        fontSize: 12, fontWeight: 700, cursor: "pointer", outline: "none",
+                                    }}
+                                >
+                                    <option value={15}>15 min</option>
+                                    <option value={30}>30 min</option>
+                                    <option value={60}>1 hr</option>
+                                    <option value={120}>2 hr</option>
+                                    <option value={240}>4 hr</option>
+                                </select>
+                                <button 
+                                    onClick={handleRequestAccess} 
+                                    disabled={isRequesting || consentPending}
+                                    style={{
+                                        display: "flex", alignItems: "center", gap: 8, padding: "10px 18px",
+                                        borderRadius: "0 12px 12px 0", border: "none", whiteSpace: "nowrap",
+                                        background: (isRequesting || consentPending) ? "#94a3b8" : THEME.accent,
+                                        color: "#fff", fontSize: 13, fontWeight: 700, cursor: (isRequesting || consentPending) ? "not-allowed" : "pointer",
+                                        boxShadow: (isRequesting || consentPending) ? "none" : "0 4px 12px rgba(37, 99, 235, 0.2)",
+                                        transition: "all 0.2s"
+                                    }}
+                                >
+                                    {isRequesting ? "Sending..." : consentPending ? "Request Pending" : <><Shield size={15} /> Request Access</>}
+                                </button>
+                            </div>
                         )}
+                        <button onClick={() => setShowDocRequestModal(true)} style={{
+                            display: "flex", alignItems: "center", gap: 8, padding: "10px 18px",
+                            borderRadius: 12, border: "1.5px solid rgba(139, 92, 246, 0.25)", whiteSpace: "nowrap",
+                            background: "transparent",
+                            color: "#8b5cf6", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                        }}>
+                            <Upload size={15} /> Ask Documents
+                        </button>
                     </div>
-
                 </div>
 
                 {/* Allergy banner */}
@@ -1661,20 +2565,30 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
 
                 {/* Patient metadata / Vitals context */}
                 <div className="uphi-vitals-bar" style={{ marginTop: 24, padding: "20px 24px", background: THEME.bg, borderRadius: 20, border: `1px solid ${THEME.border}` }}>
-                    {Object.entries({
-                        "Blood Pressure": patient.vitals?.bloodPressure || patient.vitals?.bp || "--",
-                        "Heart Rate": (patient.vitals?.heartRate || patient.vitals?.hr || "--") + " BPM",
-                        "SpO2": (patient.vitals?.spO2 || patient.vitals?.spo2 || "--") + "%",
-                        "Temp": (patient.vitals?.temperature || patient.vitals?.temp || "--") + " °C",
-                        "Weight": (patient.vitals?.weight || "--") + " kg",
-                    }).map(([label, value]) => (
-                        <div key={label}>
-                            <div style={{ fontSize: 11, fontWeight: 800, color: THEME.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>{label}</div>
-                            <div style={{ fontSize: 16, fontWeight: 700, color: THEME.textPrimary }}>{value}</div>
+                    <div style={{ display: "flex", gap: 32, alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ display: "flex", gap: 40, alignItems: "center" }}>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                <span style={{ fontSize: 11, fontWeight: 800, color: THEME.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Blood Pressure</span>
+                                <span style={{ fontSize: 16, fontWeight: 800, color: THEME.textPrimary }}>{patient.vitals?.bloodPressure || patient.vitals?.bp || mockData?.vitals?.bloodPressure || "--"}</span>
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                <span style={{ fontSize: 11, fontWeight: 800, color: THEME.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Heart Rate</span>
+                                <span style={{ fontSize: 16, fontWeight: 800, color: THEME.textPrimary }}>{fmtVital(patient.vitals?.heartRate || patient.vitals?.hr || mockData?.vitals?.heartRate)} <span style={{ fontSize: 11, fontWeight: 600, color: THEME.textMuted }}>BPM</span></span>
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                <span style={{ fontSize: 11, fontWeight: 800, color: THEME.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>SpO2</span>
+                                <span style={{ fontSize: 16, fontWeight: 800, color: THEME.textPrimary }}>{fmtVital(patient.vitals?.spO2 || patient.vitals?.spo2 || mockData?.vitals?.spO2)}<span style={{ fontSize: 11, fontWeight: 600, color: THEME.textMuted }}>%</span></span>
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                <span style={{ fontSize: 11, fontWeight: 800, color: THEME.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Temp</span>
+                                <span style={{ fontSize: 16, fontWeight: 800, color: THEME.textPrimary }}>{fmtVital(patient.vitals?.temperature || patient.vitals?.temp || mockData?.vitals?.temperature)} <span style={{ fontSize: 11, fontWeight: 600, color: THEME.textMuted }}>°C</span></span>
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                <span style={{ fontSize: 11, fontWeight: 800, color: THEME.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Weight</span>
+                                <span style={{ fontSize: 16, fontWeight: 800, color: THEME.textPrimary }}>{fmtVital(patient.vitals?.weight || mockData?.vitals?.weight)} <span style={{ fontSize: 11, fontWeight: 600, color: THEME.textMuted }}>kg</span></span>
+                            </div>
                         </div>
-                    ))}
-                    <div style={{ marginLeft: "auto" }}>
-                        <button onClick={() => setEditingDemographics(true)} style={{ fontSize: 11, padding: "6px 14px", borderRadius: 8, border: `1px solid ${THEME.border}`, background: "transparent", color: THEME.accent, fontWeight: 800, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.05em" }}>Update Vitals</button>
+                        <button onClick={() => setEditingDemographics(true)} style={{ padding: "10px 18px", borderRadius: 12, background: THEME.bg, border: `1px solid ${THEME.border}`, color: THEME.textPrimary, fontSize: 12, fontWeight: 800, cursor: "pointer" }}>UPDATE VITALS</button>
                     </div>
                 </div>
             </div>
@@ -1702,22 +2616,34 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
                     boxShadow: "0 1px 3px rgba(0,0,0,0.02)"
                 }}>
                     <div style={{ marginBottom: 32, display: "flex", justifyContent: "center" }}>
-                        <div style={{ width: 64, height: 64, borderRadius: "50%", background: THEME.bg, display: "flex", alignItems: "center", justifyContent: "center", color: THEME.textMuted }}>
-                            <Lock size={32} />
+                        <div style={{ width: 64, height: 64, borderRadius: "50%", background: THEME.bg, display: "flex", alignItems: "center", justifyContent: "center", color: consentPending ? "#f59e0b" : THEME.textMuted }}>
+                            {consentPending ? <Clock size={32} /> : <Lock size={32} />}
                         </div>
                     </div>
-                    <h3 style={{ fontSize: 24, fontWeight: 800, color: THEME.textPrimary, marginBottom: 12, fontFamily: "'Outfit', sans-serif" }}>Clinical Record Restricted</h3>
+                    <h3 style={{ fontSize: 24, fontWeight: 800, color: THEME.textPrimary, marginBottom: 12, fontFamily: "'Outfit', sans-serif" }}>
+                        {consentPending ? "Awaiting Patient Approval" : "Clinical Record Restricted"}
+                    </h3>
                     <p style={{ fontSize: 16, color: THEME.textSecondary, maxWidth: 480, margin: "0 auto 40px", lineHeight: 1.6, fontWeight: 500 }}>
-                        The health data for this patient is encrypted. Send a digital consent request to receive immediate clinical access via ABDM.
+                        {consentPending 
+                            ? "A consent request has been sent. The patient must approve it from their UPHI mobile app or web portal. This page will update automatically."
+                            : "The health data for this patient is encrypted. Send a digital consent request to receive immediate clinical access via ABDM."
+                        }
                     </p>
-                    <button onClick={() => setShowConsent(true)} style={{
-                        padding: "16px 40px", borderRadius: 16, border: "none",
-                        background: THEME.accent,
-                        color: "#fff", fontSize: 15, fontWeight: 800, cursor: "pointer",
-                        boxShadow: "0 8px 24px rgba(37, 99, 235, 0.2)"
-                    }}>
-                        <Shield size={18} style={{ marginRight: 8 }} /> Initiate Access Request
-                    </button>
+                    {consentPending ? (
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
+                            <div style={{ width: 12, height: 12, borderRadius: "50%", background: "#f59e0b", animation: "pulse 1.5s infinite" }} />
+                            <span style={{ color: "#f59e0b", fontWeight: 700, fontSize: 14 }}>Polling for approval...</span>
+                        </div>
+                    ) : (
+                        <button onClick={() => setShowConsent(true)} style={{
+                            padding: "16px 40px", borderRadius: 16, border: "none",
+                            background: THEME.accent,
+                            color: "#fff", fontSize: 15, fontWeight: 800, cursor: "pointer",
+                            boxShadow: "0 8px 24px rgba(37, 99, 235, 0.2)"
+                        }}>
+                            <Shield size={18} style={{ marginRight: 8 }} /> Initiate Access Request
+                        </button>
+                    )}
                 </div>
             ) : (
                 <div style={{ animation: "fadeIn 0.3s ease" }}>
@@ -1776,23 +2702,23 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
                                             <span style={{
                                                 fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em",
                                                 padding: "4px 14px", borderRadius: 8,
-                                                background: aiRisk.level === 'Critical' ? 'rgba(239,68,68,0.1)' : aiRisk.level === 'High' ? 'rgba(249,115,22,0.1)' : aiRisk.level === 'Moderate' ? 'rgba(234,179,8,0.1)' : 'rgba(34,197,94,0.1)',
-                                                color: aiRisk.level === 'Critical' ? '#ef4444' : aiRisk.level === 'High' ? '#f97316' : aiRisk.level === 'Moderate' ? '#eab308' : '#22c55e',
-                                            }}>{aiRisk.level} Risk</span>
+                                                background: aiRisk?.level === 'Critical' ? 'rgba(239,68,68,0.1)' : aiRisk?.level === 'High' ? 'rgba(249,115,22,0.1)' : aiRisk?.level === 'Moderate' ? 'rgba(234,179,8,0.1)' : 'rgba(34,197,94,0.1)',
+                                                color: aiRisk?.level === 'Critical' ? '#ef4444' : aiRisk?.level === 'High' ? '#f97316' : aiRisk?.level === 'Moderate' ? '#eab308' : '#22c55e',
+                                            }}>{aiRisk?.level} Risk</span>
                                         </div>
 
                                         <div style={{ marginBottom: 16 }}>
                                             <h4 style={{ fontSize: 11, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Risk Factors</h4>
-                                            {(aiRisk.factors || []).map((f, i) => (
+                                            {(aiRisk?.factors || []).map((f, i) => (
                                                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, fontSize: 12, color: "var(--text-secondary)" }}>
                                                     <AlertTriangle size={12} color="#f97316" /> {f}
                                                 </div>
                                             ))}
                                         </div>
 
-                                        {aiRisk.recommendation && (
+                                        {aiRisk?.recommendation && (
                                             <div style={{ padding: 12, background: "var(--bg-accent)", borderRadius: 12, fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.6 }}>
-                                                <strong style={{ color: "var(--accent)" }}>AI Recommendation:</strong> {aiRisk.recommendation}
+                                                <strong style={{ color: "var(--accent)" }}>AI Recommendation:</strong> {aiRisk?.recommendation}
                                             </div>
                                         )}
                                     </div>
@@ -1807,9 +2733,36 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
                     )}
 
                     {/* Medical Records Tab */}
-                    {activeTab === "records" && patient.labResults && (
+                    {activeTab === "records" && (
+                        <ErrorBoundary>
                         <div style={{ background: "var(--card-bg)", border: "1px solid var(--border)", borderRadius: 20, padding: 28 }}>
-                            <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)", margin: "0 0 20px", fontFamily: "'Playfair Display', serif" }}>Laboratory Results</h3>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                                <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)", margin: 0, fontFamily: "'Playfair Display', serif" }}>Laboratory Results</h3>
+                                {hasAccess && userRole === 'DOCTOR' && (
+                                    <button onClick={() => setAddingItem('labResults')} style={{ padding: "8px 16px", borderRadius: 10, background: THEME.accent, color: "#fff", border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ ADD RESULT</button>
+                                )}
+                            </div>
+
+                            {addingItem === 'labResults' && (
+                                <div style={{ marginBottom: 24, padding: 20, background: "rgba(255,255,255,0.03)", borderRadius: 16, border: `1px dashed ${THEME.accent}` }}>
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+                                        <input placeholder="Test Name (e.g. HbA1c)" onChange={e => setNewItem({...newItem, test: e.target.value})} style={{ padding: 10, borderRadius: 8, border: "1px solid var(--border)" }} />
+                                        <input placeholder="Value (e.g. 5.4%)" onChange={e => setNewItem({...newItem, value: e.target.value})} style={{ padding: 10, borderRadius: 8, border: "1px solid var(--border)" }} />
+                                        <input placeholder="Range (e.g. < 5.7%)" onChange={e => setNewItem({...newItem, ref: e.target.value})} style={{ padding: 10, borderRadius: 8, border: "1px solid var(--border)" }} />
+                                        <input type="date" onChange={e => setNewItem({...newItem, date: e.target.value})} style={{ padding: 10, borderRadius: 8, border: "1px solid var(--border)" }} />
+                                        <select onChange={e => setNewItem({...newItem, trend: e.target.value})} style={{ padding: 10, borderRadius: 8, border: "1px solid var(--border)" }}>
+                                            <option value="stable">Stable</option>
+                                            <option value="up">Increasing</option>
+                                            <option value="down">Decreasing</option>
+                                        </select>
+                                    </div>
+                                    <div style={{ display: "flex", gap: 10 }}>
+                                        <button onClick={() => handleAddItem('labResults')} disabled={savingEdit} style={{ padding: "8px 16px", borderRadius: 8, background: "#22c55e", color: "#fff", border: "none" }}>SAVE</button>
+                                        <button onClick={() => setAddingItem(null)} style={{ padding: "8px 16px", borderRadius: 8, background: "transparent", color: "var(--text-muted)", border: "none" }}>CANCEL</button>
+                                    </div>
+                                </div>
+                            )}
+
                             <div style={{ overflowX: "auto" }}>
                                 <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: "0 6px" }}>
                                     <thead>
@@ -1824,23 +2777,35 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {patient.labResults.map((r, i) => (
+                                        {((patient?.labResults || []).length > 0 ? patient.labResults : (mockData?.labResults || [])).map((r, i) => (
                                             <tr key={i} style={{ transition: "background 0.2s" }}
                                                 onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.02)"}
                                                 onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                                             >
-                                                <td style={{ padding: "12px 16px", fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>{r.test}</td>
+                                                <td style={{ padding: "12px 16px", fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>{r?.test}</td>
                                                 <td style={{
                                                     padding: "12px 16px", fontSize: 14, fontWeight: 700,
-                                                    color: r.trend === "up" ? "#f97316" : "var(--text-primary)",
+                                                    color: r?.trend === "up" ? "#f97316" : "var(--text-primary)",
                                                     fontFamily: "'DM Mono', monospace",
-                                                }}>{r.value}</td>
-                                                <td style={{ padding: "12px 16px", fontSize: 13, color: "var(--text-muted)" }}>{r.ref}</td>
-                                                <td style={{ padding: "12px 16px", fontSize: 13, color: "var(--text-muted)" }}>{r.date}</td>
-                                                <td style={{ padding: "12px 16px" }}>
-                                                    {r.trend === "up" && <span style={{ color: "#f97316" }}><TrendUp /></span>}
-                                                    {r.trend === "down" && <span style={{ color: "#22c55e" }}><TrendDown /></span>}
-                                                    {r.trend === "stable" && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>—</span>}
+                                                }}>{r?.value}</td>
+                                                <td style={{ padding: "12px 16px", fontSize: 13, color: "var(--text-muted)" }}>{r?.ref}</td>
+                                                <td style={{ padding: "16px 20px", color: "var(--text-secondary)", fontSize: 14 }}>{r?.date}</td>
+                                                <td style={{ padding: "16px 20px" }}>
+                                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                                        <span style={{
+                                                            padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, textTransform: "uppercase",
+                                                            background: r?.trend === "up" ? "rgba(239,68,68,0.1)" : r?.trend === "down" ? "rgba(34,197,94,0.1)" : "rgba(148,163,184,0.1)",
+                                                            color: r?.trend === "up" ? "#ef4444" : r?.trend === "down" ? "#22c55e" : "var(--text-muted)",
+                                                        }}>
+                                                            {r?.trend}
+                                                        </span>
+                                                        {hasAccess && userRole === 'DOCTOR' && (
+                                                            <div style={{ display: "flex", gap: 8 }}>
+                                                                <button onClick={() => { setNewItem(r); setEditingListIndex(i); setAddingItem('labResults'); }} style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", opacity: 0.7 }}><Edit2 size={14} /></button>
+                                                                <button onClick={() => handleRemoveItem('labResults', i)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", opacity: 0.5 }}><Trash2 size={14} /></button>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
@@ -1848,31 +2813,61 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
                                 </table>
                             </div>
                         </div>
+                        </ErrorBoundary>
                     )}
 
                     {/* Medications Tab */}
-                    {activeTab === "medications" && patient.medications && (
+                    {/* Medications Tab */}
+                    {activeTab === "medications" && (
                         <div style={{ background: "var(--card-bg)", border: "1px solid var(--border)", borderRadius: 20, padding: 28 }}>
-                            <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)", margin: "0 0 20px", fontFamily: "'Playfair Display', serif" }}>Active Medications</h3>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                                <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)", margin: 0, fontFamily: "'Playfair Display', serif" }}>Active Medications</h3>
+                                {hasAccess && userRole === 'DOCTOR' && (
+                                    <button onClick={() => setAddingItem('medications')} style={{ padding: "8px 16px", borderRadius: 10, background: THEME.accent, color: "#fff", border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ PRESCRIBE</button>
+                                )}
+                            </div>
+
+                            {addingItem === 'medications' && (
+                                <div style={{ marginBottom: 24, padding: 20, background: "rgba(255,255,255,0.03)", borderRadius: 16, border: `1px dashed ${THEME.accent}` }}>
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                                        <input placeholder="Drug Name" onChange={e => setNewItem({...newItem, name: e.target.value})} style={{ padding: 10, borderRadius: 8, border: "1px solid var(--border)" }} />
+                                        <input placeholder="Dosage (e.g. 500mg)" onChange={e => setNewItem({...newItem, dose: e.target.value})} style={{ padding: 10, borderRadius: 8, border: "1px solid var(--border)" }} />
+                                        <input placeholder="Frequency" onChange={e => setNewItem({...newItem, frequency: e.target.value})} style={{ padding: 10, borderRadius: 8, border: "1px solid var(--border)" }} />
+                                        <input placeholder="Prescriber" onChange={e => setNewItem({...newItem, prescriber: e.target.value})} style={{ padding: 10, borderRadius: 8, border: "1px solid var(--border)" }} />
+                                    </div>
+                                    <div style={{ display: "flex", gap: 10 }}>
+                                        <button onClick={() => handleAddItem('medications')} disabled={savingEdit} style={{ padding: "8px 16px", borderRadius: 8, background: "#22c55e", color: "#fff", border: "none" }}>SAVE</button>
+                                        <button onClick={() => setAddingItem(null)} style={{ padding: "8px 16px", borderRadius: 8, background: "transparent", color: "var(--text-muted)", border: "none" }}>CANCEL</button>
+                                    </div>
+                                </div>
+                            )}
+
                             <div style={{ display: "grid", gap: 12 }}>
-                                {patient.medications.map((m, i) => (
+                                {(patient.medications?.length > 0 ? patient.medications : (mockData?.medications || [])).map((m, i) => (
                                     <div key={i} style={{
-                                        display: "flex", alignItems: "center", gap: 16, padding: "16px 20px",
+                                        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "16px 20px",
                                         borderRadius: 14, border: "1px solid var(--border)", transition: "background 0.2s",
-                                    }}
-                                        onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.02)"}
-                                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                                    >
-                                        <div style={{
-                                            width: 42, height: 42, borderRadius: 12,
-                                            background: "rgba(139,92,246,0.12)", color: "#a78bfa",
-                                            display: "flex", alignItems: "center", justifyContent: "center",
-                                        }}><Pill /></div>
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>{m.name}</div>
-                                            <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>{m.dose} • {m.frequency}</div>
+                                        background: "transparent"
+                                    }}>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                                            <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(34,197,94,0.1)", color: "#22c55e", display: "flex", alignItems: "center", justifyContent: "center" }}><Pill size={24} /></div>
+                                            <div>
+                                                <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>{m?.name}</div>
+                                                <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>{m?.dose} • {m?.frequency}</div>
+                                            </div>
                                         </div>
-                                        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Prescribed by {m.prescriber}</div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+                                            <div style={{ textAlign: "right" }}>
+                                                <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase" }}>Prescriber</div>
+                                                <div style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 600 }}>{m?.prescriber || "Staff Physician"}</div>
+                                            </div>
+                                            {hasAccess && userRole === 'DOCTOR' && (
+                                                <div style={{ display: "flex", gap: 12 }}>
+                                                    <button onClick={() => { setNewItem(m); setEditingListIndex(i); setAddingItem('medications'); }} style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", opacity: 0.7 }}><Edit2 size={16} /></button>
+                                                    <button onClick={() => handleRemoveItem('medications', i)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", opacity: 0.5 }}><Trash2 size={16} /></button>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -1880,21 +2875,50 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
                     )}
 
                     {/* Timeline Tab */}
-                    {activeTab === "timeline" && patient.timeline && (
+                    {activeTab === "timeline" && (
                         <div style={{ background: "var(--card-bg)", border: "1px solid var(--border)", borderRadius: 20, padding: 28 }}>
-                            <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)", margin: "0 0 24px", fontFamily: "'Playfair Display', serif" }}>Medical Timeline</h3>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+                                <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)", margin: 0, fontFamily: "'Playfair Display', serif" }}>Medical Timeline</h3>
+                                {hasAccess && (userRole === 'DOCTOR' || userRole === 'RECEPTIONIST' || userRole === 'HOSPITAL' || userRole === 'MAIN_ADMIN') && (
+                                    <button onClick={() => setAddingItem('timeline')} style={{ padding: "8px 16px", borderRadius: 10, background: THEME.accent, color: "#fff", border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ LOG VISIT</button>
+                                )}
+                            </div>
+
+                            {addingItem === 'timeline' && (
+                                <div style={{ marginBottom: 32, padding: 20, background: "rgba(255,255,255,0.03)", borderRadius: 16, border: `1px dashed ${THEME.accent}` }}>
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                                        <input type="date" onChange={e => setNewItem({...newItem, date: e.target.value})} style={{ padding: 10, borderRadius: 8, border: "1px solid var(--border)" }} />
+                                        <input placeholder="Event (e.g. Health Checkup)" onChange={e => setNewItem({...newItem, event: e.target.value})} style={{ padding: 10, borderRadius: 8, border: "1px solid var(--border)" }} />
+                                        <input placeholder="Type (e.g. CONSULTATION)" onChange={e => setNewItem({...newItem, type: e.target.value})} style={{ padding: 10, borderRadius: 8, border: "1px solid var(--border)" }} />
+                                        <input placeholder="Facility" onChange={e => setNewItem({...newItem, facility: e.target.value})} style={{ padding: 10, borderRadius: 8, border: "1px solid var(--border)" }} />
+                                    </div>
+                                    <div style={{ display: "flex", gap: 10 }}>
+                                        <button onClick={() => handleAddItem('timeline')} disabled={savingEdit} style={{ padding: "8px 16px", borderRadius: 8, background: "#22c55e", color: "#fff", border: "none" }}>SAVE</button>
+                                        <button onClick={() => setAddingItem(null)} style={{ padding: "8px 16px", borderRadius: 8, background: "transparent", color: "var(--text-muted)", border: "none" }}>CANCEL</button>
+                                    </div>
+                                </div>
+                            )}
+
                             <div style={{ position: "relative", paddingLeft: 32 }}>
                                 <div style={{ position: "absolute", left: 7, top: 8, bottom: 8, width: 2, background: "var(--border)" }} />
-                                {patient.timeline.map((t, i) => (
+                                 {(patient.timeline?.length > 0 ? patient.timeline : (mockData?.timeline || [])).map((t, i) => (
                                     <div key={i} style={{ position: "relative", paddingBottom: 28 }}>
                                         <div style={{
                                             position: "absolute", left: -28, top: 4, width: 14, height: 14,
-                                            borderRadius: "50%", background: getTimelineColor(t.type),
+                                            borderRadius: "50%", background: getTimelineColor(t?.type),
                                             border: "3px solid var(--surface)",
                                         }} />
-                                        <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600, marginBottom: 4, fontFamily: "'DM Mono', monospace" }}>{t.date}</div>
-                                        <div style={{ fontSize: 14, color: "var(--text-primary)", fontWeight: 600, lineHeight: 1.5 }}>{t.event}</div>
-                                        <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>{t.facility}</div>
+                                        <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600, marginBottom: 4, fontFamily: "'DM Mono', monospace" }}>{t?.date}</div>
+                                        <div style={{ fontSize: 14, color: "var(--text-primary)", fontWeight: 600, lineHeight: 1.5 }}>{t?.event}</div>
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+                                            <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>{t?.facility}</div>
+                                            {hasAccess && (userRole === 'DOCTOR' || userRole === 'RECEPTIONIST' || userRole === 'HOSPITAL') && (
+                                                <div style={{ display: "flex", gap: 12 }}>
+                                                    <button onClick={() => { setNewItem(t); setEditingListIndex(i); setAddingItem('timeline'); }} style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", opacity: 0.7, fontSize: 10, fontWeight: 700 }}>EDIT</button>
+                                                    <button onClick={() => handleRemoveItem('timeline', i)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", opacity: 0.5, fontSize: 10, fontWeight: 700 }}>DELETE</button>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -1902,46 +2926,79 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
                     )}
 
                     {/* Risk Analytics Tab */}
-                    {activeTab === "analytics" && patient.riskScores && (
+                    {activeTab === "analytics" && (
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-                            {Object.entries(patient.riskScores).map(([key, data]) => {
-                                const labels = { cardiac: "Cardiovascular Risk", diabetes: "Diabetes Progression", ckd: "Chronic Kidney Disease", readmission: "30-Day Readmission" };
-                                const descriptions = {
-                                    cardiac: "Based on age, BP trends, cholesterol, smoking history, family history, and BMI",
-                                    diabetes: "Based on HbA1c trends, fasting glucose, weight, and medication adherence",
-                                    ckd: "Based on creatinine trends, BP, diabetes status, and medication nephrotoxicity",
-                                    readmission: "Based on recent discharge, comorbidities, medication changes, and age",
-                                };
-                                return (
-                                    <div key={key} style={{
-                                        background: "var(--card-bg)", border: "1px solid var(--border)", borderRadius: 20, padding: 28,
-                                        display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center",
-                                    }}>
-                                        <RiskGauge score={data.score} level={data.level} label="" size={120} />
-                                        <h4 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)", margin: "16px 0 6px", fontFamily: "'Playfair Display', serif" }}>{labels[key]}</h4>
-                                        <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5, maxWidth: 300, margin: 0 }}>{descriptions[key]}</p>
-                                        {data.trend && (
-                                            <div style={{
-                                                marginTop: 12, fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: 8,
-                                                background: data.trend === "increasing" ? "rgba(239,68,68,0.1)" : data.trend === "decreasing" ? "rgba(34,197,94,0.1)" : "rgba(148,163,184,0.08)",
-                                                color: data.trend === "increasing" ? "#ef4444" : data.trend === "decreasing" ? "#22c55e" : "var(--text-muted)",
-                                            }}>
-                                                {data.trend === "increasing" ? "↑" : data.trend === "decreasing" ? "↓" : "→"} {data.trend}
-                                            </div>
-                                        )}
+                            {((Object.keys(patient.riskScores || {}).length > 0) || (mockData?.riskScores)) ? 
+                                Object.entries(Object.keys(patient.riskScores || {}).length > 0 ? patient.riskScores : (mockData?.riskScores || {})).map(([key, data]) => {
+                                    const labels = { cardiac: "Cardiovascular Risk", diabetes: "Diabetes Progression", ckd: "Chronic Kidney Disease", readmission: "30-Day Readmission" };
+                                    const descriptions = {
+                                        cardiac: "Based on age, BP trends, cholesterol, smoking history, family history, and BMI",
+                                        diabetes: "Based on HbA1c trends, fasting glucose, weight, and medication adherence",
+                                        ckd: "Based on creatinine trends, BP, diabetes status, and medication nephrotoxicity",
+                                        readmission: "Based on recent discharge, comorbidities, medication changes, and age",
+                                    };
+                                    return (
+                                        <div key={key} style={{
+                                            background: "var(--card-bg)", border: "1px solid var(--border)", borderRadius: 20, padding: 28,
+                                            display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center",
+                                        }}>
+                                            <RiskGauge score={data?.score || 0} level={data?.level || 'low'} label="" size={120} />
+                                            <h4 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)", margin: "16px 0 6px", fontFamily: "'Playfair Display', serif" }}>{labels[key]}</h4>
+                                            <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5, maxWidth: 300, margin: 0 }}>{descriptions[key]}</p>
+                                            {data.trend && (
+                                                <div style={{
+                                                    marginTop: 12, fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: 8,
+                                                    background: data.trend === "increasing" ? "rgba(239,68,68,0.1)" : data.trend === "decreasing" ? "rgba(34,197,94,0.1)" : "rgba(148,163,184,0.08)",
+                                                    color: data.trend === "increasing" ? "#ef4444" : data.trend === "decreasing" ? "#22c55e" : "var(--text-muted)",
+                                                }}>
+                                                    {data.trend === "increasing" ? "↑" : data.trend === "decreasing" ? "↓" : "→"} {data.trend}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                }) : (
+                                    <div style={{ gridColumn: "1 / -1", padding: 60, textAlign: "center" }}>
+                                        <Activity size={48} color="var(--text-muted)" style={{ opacity: 0.3 }} />
+                                        <h4 style={{ color: "var(--text-secondary)", fontWeight: 700, marginTop: 16 }}>No Risk Data Available</h4>
+                                        <p style={{ color: "var(--text-muted)", fontSize: 14 }}>Risk analytics will populate after sufficient clinical data is collected.</p>
                                     </div>
-                                );
-                            })}
+                                )
+                            }
                         </div>
                     )}
 
                     {/* Imaging & Scans Tab */}
                     {activeTab === "imaging" && (
                         <ImagingHub 
-                            scans={imagingHistory || []} 
-                            docs={documentHistory || []}
+                            scans={[
+                                ...(imagingHistory || []),
+                                ...(vaultDocuments || []).filter(d => d && ['XRAY', 'X-RAY', 'RADIOLOGY', 'ECG'].includes(d.type?.toUpperCase())).map(d => ({
+                                    id: d.id,
+                                    type: d.type,
+                                    imageUrl: `/api/records/${d.id}/scan`,
+                                    analysis: d.diagnosticSummary || d.clinicalNotes || 'Patient Uploaded Asset. Pending staff sync.',
+                                    doctorName: 'Patient-Uploaded (Digital Vault)',
+                                    date: d.date,
+                                    isVault: true,
+                                    rawDoc: d
+                                })),
+                                ...(imagingHistory.length === 0 && mockData?.imaging ? mockData.imaging : [])
+                            ].filter(s => !!s)} 
+                            docs={[
+                                ...(documentHistory || []),
+                                ...(vaultDocuments || []).filter(d => d && !['XRAY', 'X-RAY', 'RADIOLOGY', 'ECG'].includes(d.type?.toUpperCase())).map(d => ({
+                                    id: d.id,
+                                    title: d.title || d.type,
+                                    type: d.type,
+                                    fileUrl: `/api/records/${d.id}/scan`,
+                                    uploadedBy: 'Patient (Digital Vault)',
+                                    date: d.date
+                                })),
+                                ...(documentHistory.length === 0 && mockData ? [{ id: 'mock_doc', title: 'Self-Uploaded Health Record', type: 'PDF', fileUrl: '#', uploadedBy: 'Patient (Mock)', date: new Date().toISOString() }] : [])
+                            ].filter(d => !!d)}
                             onScanUpload={handleImagingUpload} 
                             onDocUpload={handleDocumentUpload}
+                            onRequestUpload={handleRequestUpload}
                             isScanning={isScanning} 
                             onSelectScan={setSelectedImage} 
                         />
@@ -1960,6 +3017,87 @@ function PatientProfile({ patient, onBack, onDownloadCard, onUpdatePatient }) {
 
                     {activeTab === "discharge" && (
                         <DischargeTab patient={patient} />
+                    )}
+
+                    {activeTab === "vault" && (
+                        <div style={{ background: "var(--card-bg)", border: "1px solid var(--border)", borderRadius: 20, padding: 28 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+                                <div>
+                                    <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)", margin: 0, fontFamily: "'Playfair Display', serif" }}>Patient's Digital Vault</h3>
+                                    <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>Documents uploaded directly by the patient via UPHI Mobile</p>
+                                </div>
+                                <ShieldCheck size={28} color="var(--accent)" />
+                            </div>
+
+                            {isVaultLoading ? (
+                                <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>Unlocking vault...</div>
+                            ) : vaultDocuments.length > 0 ? (
+                                    <div style={{ display: "grid", gap: 12 }}>
+                                    {[...(vaultDocuments || []), ...(vaultDocuments.length === 0 && mockData ? mockData.vault : [])].map((doc, i) => (
+                                        <div key={doc.id} style={{
+                                            display: "flex", alignItems: "center", gap: 16, padding: "16px 20px",
+                                            borderRadius: 14, border: "1px solid var(--border)", background: "rgba(255,255,255,0.02)"
+                                        }}>
+                                            <div style={{
+                                                width: 42, height: 42, borderRadius: 12,
+                                                background: "rgba(59,130,246,0.1)", color: "var(--accent)",
+                                                display: "flex", alignItems: "center", justifyContent: "center",
+                                            }}><FileText /></div>
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>{doc.title || `${doc.type} Upload`}</div>
+                                                <div style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 4 }}>
+                                                    <span>Preserved via AI Asset Integrity • {new Date(doc.createdAt).toLocaleDateString()}</span>
+                                                    {doc.clinicalNotes && <span style={{ fontStyle: "italic", fontSize: 11, color: "var(--accent)" }}>Note: {doc.clinicalNotes.substring(0, 60)}...</span>}
+                                                </div>
+                                            </div>
+                                            <div style={{ display: "flex", gap: 8 }}>
+                                                {doc.contentType?.startsWith('image/') || doc.imageUrl ? (
+                                                    <button 
+                                                        onClick={() => setSelectedImage({
+                                                            type: doc.type,
+                                                            imageUrl: doc.imageUrl || `/api/records/${doc.id}/scan`,
+                                                            analysis: doc.clinicalNotes || "Patient-provided diagnostic asset.",
+                                                            doctorName: doc.hospitalName || "Patient Upload",
+                                                            date: doc.date
+                                                        })}
+                                                        style={{ padding: "8px 16px", borderRadius: 8, background: "rgba(34,197,94,0.1)", color: "#16a34a", border: "1px solid rgba(34,197,94,0.2)", fontWeight: 700, cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}
+                                                    >
+                                                        <Sparkles size={14} /> View HD Scan
+                                                    </button>
+                                                ) : (
+                                                    <button 
+                                                        onClick={() => window.open(doc.fileUrl || `/api/records/${doc.id}/scan`, '_blank')}
+                                                        style={{ padding: "8px 16px", borderRadius: 8, background: "rgba(15,23,42,0.05)", color: "var(--text-primary)", border: "1px solid var(--border)", fontWeight: 700, cursor: "pointer", fontSize: 13 }}
+                                                    >View PDF</button>
+                                                )}
+                                                {!doc.mock && <button 
+                                                    onClick={() => handleSyncFromVault(doc)}
+                                                    style={{ padding: "8px 16px", borderRadius: 8, background: "var(--accent)", color: "#fff", border: "none", fontWeight: 700, cursor: "pointer", fontSize: 13 }}
+                                                >Import to Records</button>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div style={{ padding: "48px 24px", textAlign: "center", border: "2px dashed var(--border)", borderRadius: 16 }}>
+                                    <Lock size={40} style={{ color: "var(--text-muted)", marginBottom: 16, opacity: 0.5 }} />
+                                    <h4 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>Vault Locked or Empty</h4>
+                                    <p style={{ fontSize: 14, color: "var(--text-muted)", marginBottom: 24, maxWidth: 300, margin: "0 auto 24px" }}>
+                                        No documents shared or consent is pending. Ask the patient to approve the UPHI data request.
+                                    </p>
+                                    <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center" }}>
+                                        <button 
+                                            onClick={handleDirectGrant}
+                                            style={{ padding: "12px 24px", borderRadius: 12, background: "var(--text-primary)", color: "var(--surface)", border: "none", fontWeight: 700, cursor: "pointer" }}
+                                        >Request Access Consent</button>
+                                        <button 
+                                            onClick={() => setShowUploadRequest(true)}
+                                            style={{ padding: "12px 24px", borderRadius: 12, background: "transparent", color: "var(--text-primary)", border: "1px solid var(--border)", fontWeight: 700, cursor: "pointer" }}
+                                        >Ask Patient to Upload Scan</button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     )}
 
                     {showAddFamily && (
@@ -2045,7 +3183,7 @@ function AnalyticsPage({ patients = [] }) {
     useEffect(() => {
         const fetchAnalytics = async () => {
             try {
-                const token = localStorage.getItem('uphi_token');
+                const token = sessionStorage.getItem('uphi_token');
                 const res = await axios.get('/api/analytics/summary', { headers: { Authorization: `Bearer ${token}` } });
                 setSummary(res.data);
             } catch (err) { console.error(err); }
@@ -2137,10 +3275,13 @@ function PharmacyPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [newItem, setNewItem] = useState({ name: "", type: "Tablet", stockQuantity: 0, threshold: 10, unitPrice: 0, manufacturer: "" });
 
+    const [dialogConfig, setDialogConfig] = useState({ isOpen: false, id: null });
+    const closeDialog = () => setDialogConfig({ isOpen: false, id: null });
+
     const fetchInventory = async () => {
         setIsLoading(true);
         try {
-            const token = localStorage.getItem('uphi_token');
+            const token = sessionStorage.getItem('uphi_token');
             const res = await axios.get('/api/pharmacy/inventory', { headers: { Authorization: `Bearer ${token}` } });
             setInventory(res.data);
         } catch (err) { console.error(err); }
@@ -2151,24 +3292,29 @@ function PharmacyPage() {
 
     const handleUpdateStock = async (id, adjustment) => {
         try {
-            const token = localStorage.getItem('uphi_token');
+            const token = sessionStorage.getItem('uphi_token');
             await axios.put(`/api/pharmacy/inventory/${id}/stock`, { adjustment }, { headers: { Authorization: `Bearer ${token}` } });
             fetchInventory();
         } catch (err) { alert("Failed to update stock"); }
     };
 
-    const handleDelete = async (id) => {
-        if (!window.confirm("Delete this item?")) return;
+    const handleDelete = (id) => {
+        setDialogConfig({ isOpen: true, id });
+    };
+
+    const confirmDelete = async () => {
+        if (!dialogConfig.id) return;
         try {
-            const token = localStorage.getItem('uphi_token');
-            await axios.delete(`/api/pharmacy/inventory/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+            const token = sessionStorage.getItem('uphi_token');
+            await axios.delete(`/api/pharmacy/inventory/${dialogConfig.id}`, { headers: { Authorization: `Bearer ${token}` } });
             fetchInventory();
         } catch (err) { alert("Failed to delete item"); }
+        closeDialog();
     };
 
     const handleAddItem = async () => {
         try {
-            const token = localStorage.getItem('uphi_token');
+            const token = sessionStorage.getItem('uphi_token');
             await axios.post('/api/pharmacy/inventory', newItem, { headers: { Authorization: `Bearer ${token}` } });
             setShowAddModal(false);
             setNewItem({ name: "", type: "Tablet", stockQuantity: 0, threshold: 10, unitPrice: 0, manufacturer: "" });
@@ -2305,6 +3451,12 @@ function AlertsTab({ patient }) {
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
+        const mockData = getDemoMockData(patient);
+        if (mockData) {
+            setAlerts(mockData.alerts);
+            setIsLoading(false);
+            return;
+        }
         axios.get(`/api/ai/alerts/${patient.id}`)
             .then(res => setAlerts(res.data.alerts))
             .catch(() => setAlerts("Predictive analysis unavailable."))
@@ -2388,14 +3540,21 @@ function DischargeTab({ patient }) {
 }
 
 // --- Page: Appointments ---
-function AppointmentsPage({ patients }) {
+function AppointmentsPage({ patients, forcePatientId }) {
     const [appointments, setAppointments] = useState([]);
     const [showForm, setShowForm] = useState(false);
-    const [form, setForm] = useState({ patientId: '', patientName: '', doctorName: '', department: '', date: '', time: '', notes: '', urgency: 'Standard' });
+    const [form, setForm] = useState({ patientId: forcePatientId || '', patientName: '', doctorName: '', department: '', date: '', time: '', notes: '', urgency: 'Standard' });
 
     useEffect(() => {
-        axios.get('/api/appointments').then(r => setAppointments(r.data)).catch(() => {});
-    }, []);
+        axios.get('/api/appointments').then(r => {
+            const data = r.data || [];
+            if (forcePatientId) {
+                setAppointments(data.filter(a => a.patientId === forcePatientId));
+            } else {
+                setAppointments(data);
+            }
+        }).catch(() => {});
+    }, [forcePatientId]);
 
     const handleCreate = async () => {
         try {
@@ -2505,6 +3664,7 @@ function AppointmentsPage({ patients }) {
 function PrescriptionsPage({ patients }) {
     const [prescriptions, setPrescriptions] = useState([]);
     const [showForm, setShowForm] = useState(false);
+    const [editingRxId, setEditingRxId] = useState(null);
     const [form, setForm] = useState({ patientId: '', patientName: '', doctorName: '', diagnosis: '', instructions: '', date: new Date().toISOString().split('T')[0] });
     const [meds, setMeds] = useState([{ name: '', dosage: '', frequency: '', duration: '', notes: '' }]);
     const [drugCheckResult, setDrugCheckResult] = useState(null);
@@ -2530,12 +3690,43 @@ function PrescriptionsPage({ patients }) {
 
     const handleCreate = async () => {
         try {
-            const res = await axios.post('/api/prescriptions', { ...form, medications: meds.filter(m => m.name) });
-            setPrescriptions(prev => [res.data, ...prev]);
+            const payload = { ...form, medications: meds.filter(m => m.name) };
+            if (editingRxId) {
+                const res = await axios.put(`/api/prescriptions/${editingRxId}`, payload);
+                setPrescriptions(prev => prev.map(p => p.id === editingRxId ? res.data : p));
+            } else {
+                const res = await axios.post('/api/prescriptions', payload);
+                setPrescriptions(prev => [res.data, ...prev]);
+            }
             setShowForm(false);
+            setEditingRxId(null);
+            setForm({ patientId: '', patientName: '', doctorName: '', diagnosis: '', instructions: '', date: new Date().toISOString().split('T')[0] });
             setMeds([{ name: '', dosage: '', frequency: '', duration: '', notes: '' }]);
             setDrugCheckResult(null);
-        } catch { alert("Failed to create prescription."); }
+        } catch { alert("Failed to save prescription."); }
+    };
+
+    const handleEditRx = (rx) => {
+        setForm({
+            patientId: rx.patientId || '',
+            patientName: rx.patientName || '',
+            doctorName: rx.doctorName || '',
+            diagnosis: rx.diagnosis || '',
+            instructions: rx.instructions || '',
+            date: rx.date || new Date().toISOString().split('T')[0]
+        });
+        setMeds(rx.medications && rx.medications.length > 0 ? rx.medications : [{ name: '', dosage: '', frequency: '', duration: '', notes: '' }]);
+        setEditingRxId(rx.id);
+        setShowForm(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleDeleteRx = async (id) => {
+        if (!confirm("Are you sure you want to delete this prescription?")) return;
+        try {
+            await axios.delete(`/api/prescriptions/${id}`);
+            setPrescriptions(prev => prev.filter(p => p.id !== id));
+        } catch { alert("Failed to delete."); }
     };
 
     return (
@@ -2610,7 +3801,15 @@ function PrescriptionsPage({ patients }) {
                                 <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>{rx.patientName || 'Patient'}</div>
                                 <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>Dx: {rx.diagnosis} • {rx.doctorName} • {rx.date}</div>
                             </div>
-                            <Pill size={20} color="var(--accent)" />
+                            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                {rx.id && (
+                                    <>
+                                        <button onClick={() => handleEditRx(rx)} style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", display: "flex", opacity: 0.7 }}><Edit2 size={16} /></button>
+                                        <button onClick={() => handleDeleteRx(rx.id)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", display: "flex", opacity: 0.5 }}><Trash2 size={16} /></button>
+                                    </>
+                                )}
+                                <Pill size={20} color="var(--accent)" />
+                            </div>
                         </div>
                         {rx.medications && rx.medications.map((m, j) => (
                             <div key={j} style={{ padding: "8px 14px", background: "rgba(37,99,235,0.04)", borderRadius: 10, marginBottom: 6, fontSize: 13, display: "flex", justifyContent: "space-between" }}>
@@ -2785,7 +3984,7 @@ function AiTriagePage() {
 function NotificationPanel({ notifications, onClose, onRefresh }) {
     const markAllRead = async () => {
         try {
-            const token = localStorage.getItem('uphi_token');
+            const token = sessionStorage.getItem('uphi_token');
             await axios.post('/api/notifications/mark-all-read', {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -2795,7 +3994,7 @@ function NotificationPanel({ notifications, onClose, onRefresh }) {
 
     const markRead = async (id) => {
         try {
-            const token = localStorage.getItem('uphi_token');
+            const token = sessionStorage.getItem('uphi_token');
             await axios.put(`/api/notifications/${id}/read`, {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -2849,7 +4048,7 @@ function PatientDashboard({ userName }) {
     useEffect(() => {
         const fetchProfile = async () => {
             try {
-                const token = localStorage.getItem('uphi_token');
+                const token = sessionStorage.getItem('uphi_token');
                 const res = await axios.get('/api/my-profile', {
                     headers: { Authorization: `Bearer ${token}` }
                 });
@@ -2913,11 +4112,48 @@ function PatientDashboard({ userName }) {
     );
 }
 
+// --- Component: Patient Records Explorer ---
+function PatientRecords({ records }) {
+    if (!records || records.length === 0) {
+        return (
+            <div style={{ padding: 60, textAlign: "center", background: "#fff", borderRadius: 24, border: "1px solid var(--border)" }}>
+                <FileText size={48} color="var(--text-muted)" style={{ opacity: 0.3 }} />
+                <h4 style={{ color: "var(--text-secondary)", fontWeight: 700, marginTop: 16 }}>No medical records found</h4>
+                <p style={{ color: "var(--text-muted)", fontSize: 14 }}>Securely upload documents to your Digital Vault to see them here.</p>
+            </div>
+        );
+    }
+    return (
+        <div style={{ display: "grid", gap: 16 }}>
+            {records.map((doc, i) => (
+                <div key={i} style={{ padding: 24, background: "#fff", borderRadius: 20, border: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", transition: "transform 0.2s", cursor: "pointer" }}
+                     onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
+                     onMouseLeave={e => e.currentTarget.style.transform = "none"}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+                        <div style={{ width: 56, height: 56, borderRadius: 16, background: "rgba(37,99,235,0.08)", color: "#2563eb", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <FileText size={28} />
+                        </div>
+                        <div>
+                            <div style={{ fontWeight: 800, fontSize: 17, color: "var(--text-primary)" }}>{doc.title || doc.type || "Clinical Document"}</div>
+                            <div style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 4, fontWeight: 500 }}>
+                                {doc.date || doc.uploadedAt || new Date().toLocaleDateString()} • Secured via ABDM Vault
+                            </div>
+                        </div>
+                    </div>
+                    <button style={{ padding: "10px 24px", background: "#2563eb", color: "#fff", border: "none", borderRadius: 12, fontWeight: 700, cursor: "pointer" }}>
+                        View Asset
+                    </button>
+                </div>
+            ))}
+        </div>
+    );
+}
+
 // --- Page: Patient Records (Self) ---
 function PatientRecordsPage({ userName }) {
     const [profile, setProfile] = useState(null);
     useEffect(() => {
-        axios.get('/api/my-profile', { headers: { Authorization: `Bearer ${localStorage.getItem('uphi_token')}` } })
+        axios.get('/api/my-profile', { headers: { Authorization: `Bearer ${sessionStorage.getItem('uphi_token')}` } })
             .then(res => setProfile(res.data));
     }, []);
 
@@ -2944,7 +4180,7 @@ function InvoiceModal({ patients, onClose, onSuccess }) {
         if (!patientId || !amount || !itemName) return alert("Please fill all required fields");
         setIsSubmitting(true);
         try {
-            const token = localStorage.getItem('uphi_token');
+            const token = sessionStorage.getItem('uphi_token');
             const patient = patients.find(p => p.id === patientId);
             const data = {
                 patientId,
@@ -3018,7 +4254,7 @@ function InvoicesPage({ patients, userRole, userName }) {
 
     const fetchInvoices = async () => {
         try {
-            const token = localStorage.getItem('uphi_token');
+            const token = sessionStorage.getItem('uphi_token');
             const url = isPatient ? `/api/invoices/patient/${userName}` : '/api/invoices';
             const res = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
             setInvoices(res.data);
@@ -3076,14 +4312,9 @@ function InvoicesPage({ patients, userRole, userName }) {
                                     <td style={{ padding: 20, textAlign: "right" }}>
                                         <button onClick={async () => {
                                             try {
-                                                const token = localStorage.getItem('uphi_token');
+                                                const token = sessionStorage.getItem('uphi_token');
                                                 const res = await axios.get(`/api/invoices/${inv.id}/pdf`, { responseType: 'blob', headers: { Authorization: `Bearer ${token}` } });
-                                                const url = window.URL.createObjectURL(new Blob([res.data]));
-                                                const link = document.createElement('a');
-                                                link.href = url;
-                                                link.setAttribute('download', `invoice_${inv.id}.pdf`);
-                                                document.body.appendChild(link);
-                                                link.click();
+                                                triggerBinaryDownload(res, `UPHI_Invoice_${inv.patientName.replace(/\s+/g, '_')}_${inv.id.slice(-6).toUpperCase()}.pdf`);
                                             } catch (err) { alert('Failed to download PDF'); }
                                         }} style={{ padding: "8px 16px", background: "none", border: `1px solid var(--border)`, borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "all 0.2s" }} onMouseEnter={e => e.target.style.background = "var(--bg)"} onMouseLeave={e => e.target.style.background = "none"}>View PDF</button>
                                     </td>
@@ -3104,7 +4335,7 @@ function LogsPage() {
     useEffect(() => {
         const fetchLogs = async () => {
             try {
-                const token = localStorage.getItem('uphi_token');
+                const token = sessionStorage.getItem('uphi_token');
                 const res = await axios.get('/api/admin/audit-logs', { headers: { Authorization: `Bearer ${token}` } });
                 setLogs(res.data);
             } catch (err) { console.error(err); }
@@ -3172,12 +4403,26 @@ export default function HospitalView() {
     const [unreadCount, setUnreadCount] = useState(0);
     const [showNotifications, setShowNotifications] = useState(false);
 
-    const [darkMode, setDarkMode] = useState(localStorage.getItem('uphi_dark_mode') === 'true');
+    // Staff Messaging States
+    const [staffMessages, setStaffMessages] = useState([]);
+    const [hospitalStaff, setHospitalStaff] = useState([]);
+    const [activeChatStaffId, setActiveChatStaffId] = useState(null);
+    const [showChat, setShowChat] = useState(false);
+    const [chatInput, setChatInput] = useState("");
+
+    const [dialogConfig, setDialogConfig] = useState({ isOpen: false, title: '', msg: '', onConfirm: null });
+    const closeDialog = () => setDialogConfig({ ...dialogConfig, isOpen: false });
+    
+    // Digital Vault States
+    const [vaultDocuments, setVaultDocuments] = useState([]);
+    const [isVaultLoading, setIsVaultLoading] = useState(false);
+
+    const [darkMode, setDarkMode] = useState(sessionStorage.getItem('uphi_dark_mode') === 'true');
     const menuRef = useRef(null);
     const notifyRef = useRef(null);
 
     useEffect(() => {
-        localStorage.setItem('uphi_dark_mode', darkMode);
+        sessionStorage.setItem('uphi_dark_mode', darkMode);
         const theme = darkMode ? DARK_COLORS : COLORS;
         Object.entries(theme).forEach(([key, value]) => {
             const cssKey = key === 'card' ? '--card-bg' : `--${key.replace(/[A-Z]/g, m => "-" + m.toLowerCase())}`;
@@ -3202,7 +4447,7 @@ export default function HospitalView() {
     useEffect(() => {
         const fetchMe = async () => {
             try {
-                const token = localStorage.getItem('uphi_token');
+                const token = sessionStorage.getItem('uphi_token');
                 if (!token) return;
                 const res = await axios.get('/api/users/me', { headers: { Authorization: `Bearer ${token}` } });
                 if (res.data?.hospitalName) {
@@ -3237,11 +4482,18 @@ export default function HospitalView() {
         fetchPatients();
         fetchConsents(false);
         fetchNotifications();
+        // Dynamic refresh: poll every 8s so any staff/patient updates reflect in real-time
+        const refreshInterval = setInterval(() => {
+            fetchPatients();
+            fetchConsents(false);
+            fetchNotifications();
+        }, 8000);
+        return () => clearInterval(refreshInterval);
     }, [fetchPatients, fetchConsents]);
 
     const fetchNotifications = async () => {
         try {
-            const token = localStorage.getItem('uphi_token');
+            const token = sessionStorage.getItem('uphi_token');
             const res = await axios.get('/api/notifications', {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -3254,6 +4506,94 @@ export default function HospitalView() {
             console.error("Failed to fetch notifications", err);
         }
     };
+
+    const fetchStaffMessages = async () => {
+        try {
+            const token = sessionStorage.getItem('uphi_token');
+            if (!token) return;
+            const res = await axios.get('/api/staff-messages', { headers: { Authorization: `Bearer ${token}` } });
+            setStaffMessages(res.data);
+        } catch (e) {
+            console.error("Failed to fetch staff messages", e);
+        }
+    };
+
+    const fetchHospitalStaff = async () => {
+        try {
+            const token = sessionStorage.getItem('uphi_token');
+            if (!token) return;
+            const res = await axios.get('/api/staff-messages/active-staff', { headers: { Authorization: `Bearer ${token}` } });
+            setHospitalStaff(res.data);
+        } catch (e) {
+            console.error("Failed to fetch hospital staff", e);
+        }
+    };
+
+    const sendStaffMessage = async (recipientId) => {
+        if (!chatInput.trim()) return;
+        try {
+            const token = sessionStorage.getItem('uphi_token');
+            const res = await axios.post('/api/staff-messages', {
+                senderId: userName,
+                senderName: displayName,
+                senderRole: userRole,
+                recipientId: recipientId,
+                message: chatInput
+            }, { headers: { Authorization: `Bearer ${token}` } });
+            setStaffMessages([res.data, ...staffMessages]);
+            setChatInput("");
+        } catch (e) {
+            console.error("Failed to send message", e);
+        }
+    };
+
+    const fetchVaultDocuments = async (patientId) => {
+        setIsVaultLoading(true);
+        try {
+            const res = await axios.get(`/api/records/patient/${patientId}/self-uploaded`);
+            setVaultDocuments(res.data);
+        } catch (e) {
+            console.warn("Vault access denied or empty", e);
+            setVaultDocuments([]);
+        } finally {
+            setIsVaultLoading(false);
+        }
+    };
+
+    const handleSyncFromVault = (doc) => {
+        setDialogConfig({
+            isOpen: true,
+            title: 'Import Medical Record',
+            msg: `Import this ${doc.type} into the official hospital medical records?`,
+            onConfirm: async () => {
+                closeDialog();
+                try {
+                    await axios.post(`/api/records/sync-vault/${doc.id}`, {});
+                    alert("Record synchronized successfully. Asset added to clinical history.");
+                    fetchPatients();
+                    fetchVaultDocuments(selectedPatient.id);
+                } catch (err) {
+                    alert("Synchronization failed: " + (err.response?.data || err.message));
+                }
+            }
+        });
+    };
+
+    useEffect(() => {
+        if (selectedPatient) {
+            fetchVaultDocuments(selectedPatient.id);
+        }
+    }, [selectedPatient, consents]);
+
+    useEffect(() => {
+        fetchStaffMessages();
+        fetchHospitalStaff();
+        const t = setInterval(() => {
+            fetchStaffMessages();
+            fetchHospitalStaff();
+        }, 5000); // 5s interval for demo "real-time"
+        return () => clearInterval(t);
+    }, []);
 
     // Poll for notifications every 30 seconds
     useEffect(() => {
@@ -3268,23 +4608,44 @@ export default function HospitalView() {
         }
     }, [userRole, navigate]);
 
-    const handleDownloadCard = async (patientId) => {
+
+    const handleDownloadCard = async (patientId, targetName = "Patient") => {
+        const token = sessionStorage.getItem('uphi_token');
+        // Use direct browser navigation so Chrome respects Content-Disposition header natively
+        const downloadUrl = `/api/receptionist/patients/${patientId}/id-card/download?token=${encodeURIComponent(token)}`;
+        
+        // Create a hidden iframe to trigger the download without navigating away
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = downloadUrl;
+        document.body.appendChild(iframe);
+        setTimeout(() => document.body.removeChild(iframe), 10000);
+    };
+
+    const handleDownloadOwnCard = async () => {
         try {
-            const token = localStorage.getItem('uphi_token');
-            const response = await axios.get(`/api/receptionist/patients/${patientId}/id-card`, {
+            const uname = sessionStorage.getItem('uphi_user');
+            const token = sessionStorage.getItem('uphi_token');
+            const response = await axios.get(`/api/users/${uname}/id-card`, {
                 headers: { 'Authorization': `Bearer ${token}` },
                 responseType: 'blob'
             });
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', `HealthID_${patientId}.pdf`);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
+            triggerBinaryDownload(response, `${uname}_UPHI_ID_Staff.pdf`);
         } catch (error) {
-            console.error("Failed to download health ID card:", error);
-            alert("Error downloading ID card.");
+            alert("Failed to download your staff ID card.");
+        }
+    };
+
+    const handleDownloadStaffCard = async (staffUsername) => {
+        try {
+            const token = sessionStorage.getItem('uphi_token');
+            const response = await axios.get(`/api/users/${staffUsername}/id-card`, {
+                headers: { 'Authorization': `Bearer ${token}` },
+                responseType: 'blob'
+            });
+            triggerBinaryDownload(response, `${staffUsername}_UPHI_ID_Staff.pdf`);
+        } catch (error) {
+            alert("Failed to download staff ID card.");
         }
     };
 
@@ -3296,7 +4657,7 @@ export default function HospitalView() {
 
     const handleIdUpload = async (file) => {
         try {
-            const token = localStorage.getItem('uphi_token');
+            const token = sessionStorage.getItem('uphi_token');
             const formData = new FormData();
             formData.append('file', file);
             
@@ -3328,17 +4689,24 @@ export default function HospitalView() {
         fetchPatients();
     };
 
-    const handleRemovePatient = async (id) => {
-        if (!window.confirm("Are you sure you want to permanently remove this patient from the registry?")) return;
-        try {
-            const token = localStorage.getItem('uphi_token');
-            await axios.delete(`/api/receptionist/patients/${id}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            fetchPatients();
-        } catch (err) {
-            alert(err.response?.data || "Failed to remove patient.");
-        }
+    const handleRemovePatient = (id) => {
+        setDialogConfig({
+            isOpen: true,
+            title: 'Remove Patient',
+            msg: "Are you sure you want to permanently remove this patient from the registry?",
+            onConfirm: async () => {
+                closeDialog();
+                try {
+                    const token = sessionStorage.getItem('uphi_token');
+                    await axios.delete(`/api/receptionist/patients/${id}`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    fetchPatients();
+                } catch (err) {
+                    alert(err.response?.data || "Failed to remove patient.");
+                }
+            }
+        });
     };
 
     const allNavItems = [
@@ -3382,6 +4750,7 @@ export default function HospitalView() {
         @keyframes scaleIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
         @keyframes growUp { from { height: 0; } }
         @keyframes growWidth { from { width: 0; } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
         
         input, select, textarea {
             font-family: 'Inter', sans-serif;
@@ -3492,8 +4861,26 @@ export default function HospitalView() {
                     backdropFilter: "blur(12px)",
                     position: "sticky", top: 0, zIndex: 50,
                 }}>
-                    <div style={{ fontSize: 13, color: THEME.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                        Facility: {hospitalName} • {time.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ fontSize: 13, color: THEME.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                            Facility: {hospitalName} • {time.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                        <button 
+                            onClick={() => {
+                                const hid = sessionStorage.getItem('uphi_hospital');
+                                if (hid) {
+                                    navigator.clipboard.writeText(hid);
+                                    alert(`Hospital ID copied to clipboard:\n${hid}`);
+                                } else {
+                                    alert('Hospital ID not available.');
+                                }
+                            }}
+                            style={{ padding: "8px 14px", borderRadius: 10, background: "rgba(15,23,42,0.05)", border: `1px solid ${THEME.border}`, color: THEME.textPrimary, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, transition: "all 0.2s" }}
+                            onMouseEnter={e => e.currentTarget.style.background = "rgba(15,23,42,0.1)"}
+                            onMouseLeave={e => e.currentTarget.style.background = "rgba(15,23,42,0.05)"}
+                        >
+                            <Building2 size={13} /> Hospital ID
+                        </button>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
                         <button onClick={() => setDarkMode(!darkMode)} style={{
@@ -3576,23 +4963,41 @@ export default function HospitalView() {
                                         onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = THEME.textSecondary; }}
                                     >
                                         <Settings size={18} /> System Settings
-
                                     </button>
 
-                                    <button
-                                        onClick={() => { logout(); navigate('/'); }}
-                                        style={{
-                                            width: "100%", padding: "12px 16px", borderRadius: 12, border: "none",
-                                            background: "transparent", color: THEME.critical, fontSize: 13, fontWeight: 800,
-                                            display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left",
-                                            marginTop: 4
-                                        }}
-                                        onMouseEnter={e => { e.currentTarget.style.background = "#fef2f2"; }}
-                                        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-                                    >
-                                        <LogOut size={18} /> Secure Log Out
+                                    <div style={{ padding: "8px 16px", borderTop: `1px solid ${THEME.border}`, marginTop: 8 }}>
+                                        <div style={{ fontSize: 11, color: THEME.textMuted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>Credentials</div>
+                                        <button 
+                                            onClick={() => handleDownloadOwnCard()}
+                                            style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "rgba(37,99,235,0.05)", border: "1px solid rgba(37,99,235,0.1)", borderRadius: 12, color: THEME.accent, cursor: "pointer", transition: "all 0.2s" }}
+                                            onMouseEnter={e => e.currentTarget.style.background = "rgba(37,99,235,0.1)"}
+                                            onMouseLeave={e => e.currentTarget.style.background = "rgba(37,99,235,0.05)"}
+                                        >
+                                            <QrCode size={18} />
+                                            <div style={{ textAlign: "left" }}>
+                                                <div style={{ fontSize: 13, fontWeight: 800 }}>Download ID Card</div>
+                                                <div style={{ fontSize: 10, opacity: 0.7 }}>Scannable QR Verification</div>
+                                            </div>
+                                        </button>
+                                    </div>
 
-                                    </button>
+                                    <div style={{ borderTop: `1px solid ${THEME.border}`, padding: "8px 16px" }}>
+                                        <button
+                                            onClick={() => {
+                                                sessionStorage.clear();
+                                                window.location.href = '/';
+                                            }}
+                                            style={{
+                                                width: "100%", padding: "12px 16px", borderRadius: 12, border: "none",
+                                                background: "transparent", color: THEME.critical, fontSize: 13, fontWeight: 800,
+                                                display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left"
+                                            }}
+                                            onMouseEnter={e => { e.currentTarget.style.background = "#fef2f2"; }}
+                                            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                                        >
+                                            <LogOut size={18} /> Secure Log Out
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -3607,7 +5012,7 @@ export default function HospitalView() {
                             onClose={() => setVerificationResult(null)} 
                             onConfirmConsent={async () => {
                                 try {
-                                    const token = localStorage.getItem('uphi_token');
+                                    const token = sessionStorage.getItem('uphi_token');
                                     await axios.post(`/api/patients/${verificationResult.patientId}/link-hospital`, {}, {
                                         headers: { Authorization: `Bearer ${token}` }
                                     });
@@ -3639,6 +5044,7 @@ export default function HospitalView() {
                             onRemovePatient={handleRemovePatient} 
                             onDownloadCard={handleDownloadCard} 
                             onUploadId={handleIdUpload}
+                            onQRResult={setVerificationResult}
                         />
                     )}
                     {activeTab === "register" && (
@@ -3656,6 +5062,8 @@ export default function HospitalView() {
                             onBack={() => setActiveTab("registry")} 
                             onDownloadCard={handleDownloadCard}
                             onUpdatePatient={handleUpdatePatient}
+                            vaultDocuments={vaultDocuments}
+                            isVaultLoading={isVaultLoading}
                         />
                     )}
                     {activeTab === "consent" && <ConsentPage consents={consents} />}
@@ -3674,6 +5082,132 @@ export default function HospitalView() {
                     {activeTab === "patient_appointments" && <AppointmentsPage patients={patients} forcePatientId={userName} />}
                 </div>
             </main>
+
+            {/* Staff Linkup / Messenger */}
+            <div style={{
+                position: "fixed", bottom: 24, right: 24, zIndex: 1000,
+                display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 16
+            }}>
+                {showChat && (
+                    <div style={{
+                        width: 400, height: 500, background: "var(--card-bg)",
+                        border: "1px solid var(--border)", borderRadius: 24,
+                        boxShadow: "0 20px 50px rgba(0,0,0,0.15)", display: "flex",
+                        flexDirection: "column", overflow: "hidden", animation: "slideUp 0.3s ease"
+                    }}>
+                        {/* Chat Header */}
+                        <div style={{ background: "var(--accent)", color: "#fff", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <MessageSquare size={18} />
+                                <span style={{ fontWeight: 700, fontSize: 15 }}>Staff Linkup</span>
+                            </div>
+                            <button onClick={() => setShowChat(false)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer" }}><X size={20} /></button>
+                        </div>
+
+                        {/* Staff List / Chat Window */}
+                        {!activeChatStaffId ? (
+                            <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+                                <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>Active Hospital Staff</div>
+                                {hospitalStaff.length === 0 ? (
+                                    <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>No other staff currently active in this facility.</div>
+                                ) : (
+                                    hospitalStaff.map(s => (
+                                        <div key={s.id} onClick={() => setActiveChatStaffId(s.username)} style={{
+                                            display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12,
+                                            cursor: "pointer", transition: "all 0.2s"
+                                        }} onMouseEnter={e => e.currentTarget.style.background = "var(--bg)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                                            <div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--accentMuted)", color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14 }}>
+                                                {s.username[0].toUpperCase()}
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{s.username}</div>
+                                                <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{s.role}</div>
+                                            </div>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                                <button 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleDownloadStaffCard(s.username);
+                                                    }}
+                                                    title="Staff ID Card"
+                                                    style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", padding: 4, opacity: 0.6 }}
+                                                    onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                                                    onMouseLeave={e => e.currentTarget.style.opacity = 0.6}
+                                                >
+                                                    <QrCode size={16} />
+                                                </button>
+                                                <div style={{ width: 8, height: 8, borderRadius: 4, background: "#22c55e" }} />
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        ) : (
+                            <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+                                <div style={{ padding: "8px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
+                                    <button onClick={() => setActiveChatStaffId(null)} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: 4 }}><ArrowLeft size={16} /></button>
+                                    <span style={{ fontSize: 14, fontWeight: 700 }}>{activeChatStaffId}</span>
+                                </div>
+                                <div style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column-reverse", gap: 12 }}>
+                                    {staffMessages
+                                        .filter(m => (m.senderId === activeChatStaffId && m.recipientId === userName) || (m.senderId === userName && m.recipientId === activeChatStaffId))
+                                        .map(m => (
+                                            <div key={m.id} style={{
+                                                alignSelf: m.senderId === userName ? "flex-end" : "flex-start",
+                                                maxWidth: "80%", padding: "10px 14px", borderRadius: 16,
+                                                background: m.senderId === userName ? "var(--accent)" : "var(--border)",
+                                                color: m.senderId === userName ? "#fff" : "var(--text-primary)",
+                                                fontSize: 13, lineHeight: 1.5
+                                            }}>
+                                                {m.message}
+                                            </div>
+                                        ))
+                                    }
+                                </div>
+                                <div style={{ padding: 16, borderTop: "1px solid var(--border)", display: "flex", gap: 10 }}>
+                                    <input 
+                                        type="text" 
+                                        placeholder="Type a message..." 
+                                        value={chatInput}
+                                        onChange={e => setChatInput(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && sendStaffMessage(activeChatStaffId)}
+                                        style={{ flex: 1, padding: "10px 14px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text-primary)", fontSize: 13 }} 
+                                    />
+                                    <button 
+                                        onClick={() => sendStaffMessage(activeChatStaffId)}
+                                        style={{ background: "var(--accent)", color: "#fff", border: "none", borderRadius: 12, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                                    ><Send size={18} /></button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+                <button 
+                    onClick={() => setShowChat(!showChat)}
+                    style={{
+                        width: 64, height: 64, borderRadius: 32, background: "var(--accent)", color: "#fff",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        boxShadow: "0 8px 30px rgba(37,99,235,0.3)", border: "none", cursor: "pointer",
+                        transition: "all 0.3s ease", transform: showChat ? "rotate(90deg)" : "none"
+                    }}
+                >
+                    {showChat ? <X size={28} /> : <MessageSquare size={28} />}
+                </button>
+            </div>
+
+            {/* Global Custom Dialog Component for HospitalView */}
+            {dialogConfig.isOpen && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+                    <div style={{ background: '#fff', borderRadius: 24, padding: 32, width: '100%', maxWidth: 460, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', border: '1px solid #e2e8f0' }}>
+                        <h3 style={{ margin: '0 0 12px 0', fontSize: 20, fontWeight: 800, color: '#0f172a' }}>{dialogConfig.title}</h3>
+                        <p style={{ margin: '0 0 24px 0', fontSize: 15, color: '#475569', lineHeight: 1.5 }}>{dialogConfig.msg}</p>
+                        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 16 }}>
+                            <button onClick={closeDialog} style={{ padding: '12px 20px', borderRadius: 12, border: 'none', background: '#f1f5f9', color: '#475569', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                            <button onClick={dialogConfig.onConfirm} style={{ padding: '12px 20px', borderRadius: 12, border: 'none', background: '#2563eb', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Confirm</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

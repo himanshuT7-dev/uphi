@@ -5,10 +5,10 @@ import { useNavigate } from 'react-router-dom';
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-    const [token, setToken] = useState(localStorage.getItem('uphi_token') || null);
-    const [role, setRole] = useState(localStorage.getItem('uphi_role') || null);
-    const [username, setUsername] = useState(localStorage.getItem('uphi_user') || null);
-    const [hospitalId, setHospitalId] = useState(localStorage.getItem('uphi_hospital') || null);
+    const [token, setToken] = useState(sessionStorage.getItem('uphi_token') || null);
+    const [role, setRole] = useState(sessionStorage.getItem('uphi_role') || null);
+    const [username, setUsername] = useState(sessionStorage.getItem('uphi_user') || null);
+    const [hospitalId, setHospitalId] = useState(sessionStorage.getItem('uphi_hospital') || null);
     const [loading, setLoading] = useState(false);
     
     // Configure default Axios interceptors for ease of use across the app
@@ -25,7 +25,7 @@ export function AuthProvider({ children }) {
         };
 
         const reqInterceptor = axios.interceptors.request.use(config => {
-            const token = localStorage.getItem('uphi_token');
+            const token = sessionStorage.getItem('uphi_token');
             if (token && token !== "null" && token !== "undefined") {
                 config.headers.Authorization = `Bearer ${token}`;
             }
@@ -44,6 +44,12 @@ export function AuthProvider({ children }) {
                         return Promise.reject(error);
                     }
 
+                    // Don't auto-logout during seeding operations
+                    if (window.__UPHI_SEEDING_IN_PROGRESS__) {
+                        console.warn('[AuthContext] 401 suppressed during seeding operation');
+                        return Promise.reject(error);
+                    }
+
                     if (isRefreshing) {
                         return new Promise((resolve, reject) => {
                             failedQueue.push({ resolve, reject });
@@ -57,20 +63,23 @@ export function AuthProvider({ children }) {
                     isRefreshing = true;
 
                     try {
-                        const currentToken = localStorage.getItem('uphi_token');
+                        const currentToken = sessionStorage.getItem('uphi_token');
                         const res = await axios.post('/api/auth/refresh', {}, {
                             headers: { Authorization: `Bearer ${currentToken}` }
                         });
                         const newToken = res.data.token;
-                        localStorage.setItem('uphi_token', newToken);
+                        sessionStorage.setItem('uphi_token', newToken);
                         setToken(newToken);
                         processQueue(null, newToken);
                         originalRequest.headers.Authorization = `Bearer ${newToken}`;
                         return axios(originalRequest);
                     } catch (refreshError) {
                         processQueue(refreshError, null);
-                        logout();
-                        window.location.href = "/";
+                        // Only force-redirect if we're not in a seeding operation
+                        if (!window.__UPHI_SEEDING_IN_PROGRESS__) {
+                            logout();
+                            window.location.href = "/";
+                        }
                         return Promise.reject(refreshError);
                     } finally {
                         isRefreshing = false;
@@ -89,10 +98,11 @@ export function AuthProvider({ children }) {
     }, []);
 
     const login = (data) => {
-        localStorage.setItem('uphi_token', data.token);
-        localStorage.setItem('uphi_role', data.role);
-        localStorage.setItem('uphi_user', data.username);
-        localStorage.setItem('uphi_hospital', data.hospitalId);
+        sessionStorage.setItem('uphi_token', data.token);
+        sessionStorage.setItem('uphi_role', data.role);
+        sessionStorage.setItem('uphi_user', data.username);
+        sessionStorage.setItem('uphi_hospital', data.hospitalId);
+        sessionStorage.setItem('uphi_fullname', data.fullName || '');
         setToken(data.token);
         setRole(data.role);
         setUsername(data.username);
@@ -100,7 +110,7 @@ export function AuthProvider({ children }) {
     };
 
     const logout = () => {
-        localStorage.clear();
+        sessionStorage.clear();
         setToken(null);
         setRole(null);
         setUsername(null);

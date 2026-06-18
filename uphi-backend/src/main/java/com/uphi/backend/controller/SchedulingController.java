@@ -81,4 +81,23 @@ public class SchedulingController {
     public List<Prescription> getAllPrescriptions() {
         return prescriptionRepository.findAll();
     }
+
+    @PutMapping("/prescriptions/{id}")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'HOSPITAL', 'ADMIN', 'MAIN_ADMIN')")
+    public ResponseEntity<Prescription> updatePrescription(@PathVariable String id, @RequestBody Prescription updatedPrescription) {
+        return prescriptionRepository.findById(id).map(existing -> {
+            updatedPrescription.setId(id);
+            return ResponseEntity.ok(prescriptionRepository.save(updatedPrescription));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/prescriptions/{id}")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'HOSPITAL', 'ADMIN', 'MAIN_ADMIN')")
+    public ResponseEntity<?> deletePrescription(@PathVariable String id) {
+        if (!prescriptionRepository.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        prescriptionRepository.deleteById(id);
+        return ResponseEntity.ok().build();
+    }
 }

@@ -22,20 +22,17 @@ export default function Login() {
 
     const handleSendOtp = async (e) => {
         e.preventDefault();
-        if (identifier.includes('@')) {
-            setLoading(true);
-            try {
-                await axios.post('/api/receptionist/patients/otp/generate', {
-                    email: identifier
-                });
-                setOtpSent(true);
-            } catch (error) {
-                alert("Failed to send OTP. Please check your email address.");
-            } finally {
-                setLoading(false);
-            }
-        } else {
-            alert("Please enter a valid Email address to receive an OTP.");
+        setLoading(true);
+        try {
+            await axios.post('/api/receptionist/patients/otp/generate', {
+                email: identifier.includes('@') ? identifier : null,
+                phone: !identifier.includes('@') ? identifier : null
+            });
+            setOtpSent(true);
+        } catch (error) {
+            alert("Failed to send OTP. Please check your network connection.");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -44,36 +41,51 @@ export default function Login() {
         e.preventDefault();
         setLoading(true);
         try {
-            // 1. Try to register (This verifies OTP on backend)
             let abhaAddress = "";
-            try {
-                const response = await axios.post('/api/receptionist/patients/register', {
-                    email: identifier.trim(),
-                    otp: otp,
-                    fullName: fullName || ("Patient " + identifier.split('@')[0]),
-                    dob: dob,
-                    gender: gender,
-                    bloodGroup: bloodGroup,
-                    address: "India",
-                    oldDiagnosis: []
+            let finalPassword = "";
+            
+            // --- DEMO HERO BYPASS ---
+            // If the user inputs the known demo ID, we skip registration (because they are pre-seeded) 
+            // and simply verify the OTP before logging in with our seeded credentials.
+            if (identifier.trim() === 'ABHA-1234-5678') {
+                abhaAddress = "ABHA-1234-5678";
+                finalPassword = "Patient@123";
+                
+                // Consume and validate the OTP using the verify endpoint
+                await axios.post('/api/receptionist/patients/otp/verify', {
+                    email: identifier.includes('@') ? identifier.trim() : null,
+                    phone: !identifier.includes('@') ? identifier.trim() : null,
+                    otp: otp
                 });
-                abhaAddress = response.data.abhaAddress;
-            } catch (regError) {
-                // 2. Fallback: If registration fails because user exists, we still need to LOGIN
-                // But we first need to verify the OTP was actually valid for this session
-                if (regError.response && regError.response.status === 400) {
-                    // Check if it's an "already exists" error
-                    // Proceed to login using the identifier (which can be email/phone/abha)
-                    abhaAddress = identifier.trim();
-                } else {
-                    throw regError;
+            } else {
+                // --- REAL WORLD FLOW ---
+                try {
+                    const response = await axios.post('/api/receptionist/patients/register', {
+                        email: identifier.includes('@') ? identifier.trim() : null,
+                        phone: !identifier.includes('@') ? identifier.trim() : null,
+                        otp: otp,
+                        fullName: fullName || ("Patient " + identifier.split('@')[0]),
+                        dob: dob,
+                        gender: gender,
+                        bloodGroup: bloodGroup,
+                        address: "India",
+                        oldDiagnosis: []
+                    });
+                    abhaAddress = response.data.abhaAddress;
+                } catch (regError) {
+                    if (regError.response && regError.response.status === 400) {
+                        abhaAddress = identifier.trim();
+                    } else {
+                        throw regError;
+                    }
                 }
+                finalPassword = "PatientSecure@" + identifier.split('@')[0];
             }
             
             // 3. Auto-login after registration or verified identity
             const loginRes = await axios.post('/api/auth/login', {
                 username: abhaAddress,
-                password: "PatientSecure@" + identifier.split('@')[0]
+                password: finalPassword
             });
             handleSuccessfulLogin(loginRes.data);
         } catch (error) {
@@ -309,7 +321,7 @@ export default function Login() {
                                                 onChange={(e) => setIdentifier(e.target.value)}
                                                 onBlur={(e) => setIdentifier(e.target.value.trim())}
                                                 className="block w-full pl-12 pr-4 bg-[#f8fafc] border border-slate-200 rounded-2xl py-4 text-[#0f172a] placeholder-[#94a3b8] focus:border-blue-600 focus:ring-0 transition-all font-medium"
-                                                placeholder={role === 'admin' ? 'admin@uphi' : 'doctor.smith@health'}
+                                                placeholder={role === 'admin' ? 'admin@uphi' : 'doctor.sharma@health'}
                                             />
                                         </div>
                                     </div>

@@ -4,6 +4,7 @@ import Login from './pages/Login';
 import PatientView from './pages/PatientView';
 import HospitalView from './pages/HospitalView';
 import AdminView from './pages/AdminView';
+import VerificationPage from './pages/VerificationPage';
 import { AuthProvider } from './context/AuthContext';
 import { DataProvider } from './context/StoreContext';
 
@@ -17,6 +18,7 @@ function App() {
             <Route path="/patient" element={<PatientView />} />
             <Route path="/hospital" element={<HospitalView />} />
             <Route path="/admin" element={<AdminView />} />
+            <Route path="/verify/:type/:id" element={<VerificationPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </DataProvider>

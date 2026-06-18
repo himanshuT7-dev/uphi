@@ -11,7 +11,8 @@ public class Notification {
     private String recipientId; // User ID or Patient ID
     private String title;
     private String message;
-    private String type; // APPOINTMENT, RISK, RECORD, BILLING
+    private String type; // APPOINTMENT, RISK, RECORD, BILLING, UPLOAD_REQUEST
+    private String metadata; // Actionable metadata (e.g. "RADIOLOGY")
     private boolean read = false;
     private Instant createdAt = Instant.now();
 
@@ -27,6 +28,8 @@ public class Notification {
     public void setMessage(String message) { this.message = message; }
     public String getType() { return type; }
     public void setType(String type) { this.type = type; }
+    public String getMetadata() { return metadata; }
+    public void setMetadata(String metadata) { this.metadata = metadata; }
     public boolean isRead() { return read; }
     public void setRead(boolean read) { this.read = read; }
     public Instant getCreatedAt() { return createdAt; }

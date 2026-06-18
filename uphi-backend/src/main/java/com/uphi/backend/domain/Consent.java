@@ -17,15 +17,21 @@ public class Consent {
     @org.springframework.data.mongodb.core.index.Indexed
     private String hospitalId; // Ref to User (HOSPITAL)
 
+    private String hospitalName;
+    private String doctorName;
     private String purpose;
-    private String status; // PENDING, GRANTED, REVOKED
+    private String status; // PENDING, APPROVED, DENIED
+    private String duration;
     private Instant expirationDate;
-    private List<String> dataTypes; // Array of permitted record types (e.g. XRAY, ECG)
+    private List<String> dataTypes; 
+    private String metadata; // Stores requested document types for DOCUMENT_REQUEST consents
 
     private Instant createdAt;
+    private Instant updatedAt;
 
     public Consent() {
         this.createdAt = Instant.now();
+        this.updatedAt = Instant.now();
         this.status = "PENDING";
     }
 
@@ -53,6 +59,22 @@ public class Consent {
         this.hospitalId = hospitalId;
     }
 
+    public String getHospitalName() {
+        return hospitalName;
+    }
+
+    public void setHospitalName(String hospitalName) {
+        this.hospitalName = hospitalName;
+    }
+
+    public String getDoctorName() {
+        return doctorName;
+    }
+
+    public void setDoctorName(String doctorName) {
+        this.doctorName = doctorName;
+    }
+
     public String getPurpose() {
         return purpose;
     }
@@ -67,6 +89,14 @@ public class Consent {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getDuration() {
+        return duration;
+    }
+
+    public void setDuration(String duration) {
+        this.duration = duration;
     }
 
     public Instant getExpirationDate() {
@@ -91,5 +121,21 @@ public class Consent {
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(Instant updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public String getMetadata() {
+        return metadata;
+    }
+
+    public void setMetadata(String metadata) {
+        this.metadata = metadata;
     }
 }

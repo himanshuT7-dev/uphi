@@ -25,6 +25,11 @@ public class User {
     
     @Indexed
     private String hospitalId; // Links staff to a specific tenant facility
+    
+    // Staff Details for ID Cards
+    private String fullName;
+    private String specialization;
+    private String registrationId;
 
     private Instant createdAt;
 
@@ -52,4 +57,11 @@ public class User {
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+
+    public String getFullName() { return fullName; }
+    public void setFullName(String fullName) { this.fullName = fullName; }
+    public String getSpecialization() { return specialization; }
+    public void setSpecialization(String specialization) { this.specialization = specialization; }
+    public String getRegistrationId() { return registrationId; }
+    public void setRegistrationId(String registrationId) { this.registrationId = registrationId; }
 }

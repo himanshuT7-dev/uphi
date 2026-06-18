@@ -65,8 +65,9 @@ public class InvoiceController {
         return invoiceRepository.findById(id).map(inv -> {
             try {
                 byte[] pdf = pdfService.generateInvoicePdf(inv);
+                String fileName = inv.getPatientName() != null ? inv.getPatientName().replaceAll("\\s+", "_") : id;
                 return ResponseEntity.ok()
-                        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=invoice_" + id + ".pdf")
+                        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"UPHI_Invoice_" + fileName + ".pdf\"")
                         .contentType(MediaType.APPLICATION_PDF)
                         .body(pdf);
             } catch (Exception e) {

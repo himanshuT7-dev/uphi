@@ -65,6 +65,11 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/receptionist/patients/register").permitAll()
                         .requestMatchers("/api/receptionist/patients/otp/**").permitAll()
+                        .requestMatchers("/api/verify/**").permitAll()
+                        .requestMatchers("/api/receptionist/patients/*/id-card/download").permitAll()
+                        .requestMatchers("/api/patients/*/id-card/download").permitAll()
+                        .requestMatchers("/api/hospitals/*/id-card").permitAll()
+                        .requestMatchers("/api/users/*/id-card").permitAll()
                         // Publicly accessible frontend static files & routes (SPA)
                         .requestMatchers("/", "/index.html", "/static/**", "/assets/**", "/*.js", "/*.css", "/*.png", "/*.ico", "/*.svg").permitAll()
                         .requestMatchers("/hospital**", "/patient**", "/admin**").permitAll() 
@@ -81,16 +86,11 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // Be explicit about origins to avoid 403 preflight issues
-        configuration.setAllowedOrigins(List.of(
-            "http://localhost:5173", 
-            "http://127.0.0.1:5173",
-            "http://localhost:3000",
-            "http://localhost:8080"
-        ));
+        // Allow all origins for mobile app (Expo Go) connections
+        configuration.setAllowedOriginPatterns(List.of("*"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
-        configuration.setAllowCredentials(true); // Needed if we want to allow cross-origin auth
+        configuration.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;

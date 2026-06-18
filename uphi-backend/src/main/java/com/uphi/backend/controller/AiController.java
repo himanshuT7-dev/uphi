@@ -88,9 +88,9 @@ public class AiController {
 
     @PostMapping("/search")
     @PreAuthorize("hasAnyRole('DOCTOR', 'HOSPITAL', 'ADMIN', 'MAIN_ADMIN')")
-    public ResponseEntity<?> naturalLanguageSearch(@RequestBody Map<String, String> request) {
+    public ResponseEntity<?> naturalLanguageSearch(@RequestBody Map<String, String> request, org.springframework.security.core.Authentication authentication) {
         String query = request.get("query");
-        List<Patient> allPatients = patientService.getAllPatients();
+        List<Patient> allPatients = patientService.getAllPatients(authentication.getName());
 
         List<Map<String, Object>> summaries = allPatients.stream().map(p -> {
             Map<String, Object> m = new HashMap<>();

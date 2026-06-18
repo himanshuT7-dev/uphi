@@ -27,62 +27,31 @@ public class DataInitializer {
             MedicalRecordRepository medicalRecordRepository,
             PasswordEncoder passwordEncoder) {
         return args -> {
-            if (userRepository.findByUsername("admin").isPresent() || userRepository.findByUsername("main_admin").isPresent()) {
-                logger.info("Database already initialized. Skipping wipe.");
-                return;
-            }
+            // ALWAYS ensure basic demo accounts exist
+            // 1. Core Platform Admins
+            ensureUser(userRepository, passwordEncoder, "uphi_master", "Master@123", Role.MAIN_ADMIN);
+            ensureUser(userRepository, passwordEncoder, "admin", "admin123", Role.MAIN_ADMIN);
+            ensureUser(userRepository, passwordEncoder, "Himanshu", "Welcome@123", Role.MAIN_ADMIN);
+            ensureUser(userRepository, passwordEncoder, "main_admin", "admin123", Role.MAIN_ADMIN);
 
-            logger.info("Initializing new database... Creating default users.");
-            userRepository.deleteAll();
-            patientRepository.deleteAll();
-            medicalRecordRepository.deleteAll();
+            // 2. Default Clinical Sample Roles (Standalone Mock)
+            ensureUser(userRepository, passwordEncoder, "doctor", "doctor123", Role.DOCTOR);
+            ensureUser(userRepository, passwordEncoder, "receptionist", "recep123", Role.RECEPTIONIST);
 
-            // 1. Create Default ROOT Admin
-            User admin = new User();
-            admin.setUsername("Himanshu");
-            admin.setMobile("9834408154");
-            admin.setPasswordHash(passwordEncoder.encode("Welcome@123"));
-            admin.setRole(Role.MAIN_ADMIN);
-            admin.setCreatedAt(Instant.now());
-            userRepository.save(admin);
+            logger.info("Data initialization complete. Core identities ready.");
 
-            // 2. Create standard "admin" access
-            User standardAdmin = new User();
-            standardAdmin.setUsername("admin");
-            standardAdmin.setPasswordHash(passwordEncoder.encode("admin123"));
-            standardAdmin.setRole(Role.MAIN_ADMIN);
-            standardAdmin.setCreatedAt(Instant.now());
-            userRepository.save(standardAdmin);
-
-            // 3. Create "main_admin" access (per user feedback)
-            User mainAdmin = new User();
-            mainAdmin.setUsername("main_admin");
-            mainAdmin.setPasswordHash(passwordEncoder.encode("admin123"));
-            mainAdmin.setRole(Role.MAIN_ADMIN);
-            mainAdmin.setCreatedAt(Instant.now());
-            userRepository.save(mainAdmin);
-
-            // 4. Create default DOCTOR
-            User doctor = new User();
-            doctor.setUsername("doctor");
-            doctor.setPasswordHash(passwordEncoder.encode("doctor123"));
-            doctor.setRole(Role.DOCTOR);
-            doctor.setCreatedAt(Instant.now());
-            userRepository.save(doctor);
-
-            // 5. Create default RECEPTIONIST
-            User recep = new User();
-            recep.setUsername("receptionist");
-            recep.setPasswordHash(passwordEncoder.encode("recep123"));
-            recep.setRole(Role.RECEPTIONIST);
-            recep.setCreatedAt(Instant.now());
-            userRepository.save(recep);
-
-            logger.info("Clinical users created: doctor (pw: doctor123), receptionist (pw: recep123)");
-
-            logger.info("Default Admin users created: Himanshu, admin, main_admin (pw: admin123)");
-
-            logger.info("Data initialization complete. Testing data wiped. Ready for production.");
         };
+    }
+
+    private void ensureUser(UserRepository repo, PasswordEncoder encoder, String user, String pass, Role role) {
+        if (repo.findByUsername(user).isEmpty()) {
+            User u = new User();
+            u.setUsername(user);
+            u.setPasswordHash(encoder.encode(pass));
+            u.setRole(role);
+            u.setCreatedAt(Instant.now());
+            repo.save(u);
+            logger.info("Created core user: {}", user);
+        }
     }
 }

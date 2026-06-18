@@ -41,6 +41,14 @@ public class NotificationController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
+    @PostMapping
+    @PreAuthorize("hasAnyRole('DOCTOR', 'RECEPTIONIST', 'ADMIN')")
+    public Notification sendNotification(@RequestBody Notification notification) {
+        notification.setCreatedAt(java.time.Instant.now());
+        notification.setRead(false);
+        return notificationRepository.save(notification);
+    }
+
     @PostMapping("/mark-all-read")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> markAllRead(Authentication authentication) {
