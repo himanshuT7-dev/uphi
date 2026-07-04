@@ -32,7 +32,4 @@ gemini:
   api-key: ${GEMINI_API_KEY:your_api_key}
   model: gemini-2.0-flash
  
-twilio:
-  account-sid: ${TWILIO_ACCOUNT_SID:ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX}
-  auth-token: ${TWILIO_AUTH_TOKEN:your_auth_token}
-  from-number: ${TWILIO_FROM_NUMBER:+1234567890}
+

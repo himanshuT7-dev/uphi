@@ -43,31 +43,53 @@ public class ReceptionistService {
         return otpService.generateAndSendOtp(targetEmail);
     }
  
-    public String requestPatientSmsOtp(String phone) {
-        return otpService.generateAndSendSmsOtp(phone);
-    }
- 
     public boolean validateOtpOnly(String identity, String otp) {
         return otpService.validateOtp(identity, otp, false);
     }
 
 
-    public Patient registerPatient(String requesterUsername, String email, String phone, String otp, String fullName, String dob, String gender, String bloodGroup, String address, String aadhaar, String abha, List<Condition> oldDiagnosis) {
+    public Patient registerPatient(String requesterUsername, String email, String phone, String otp, String fullName, String dob, String gender, String bloodGroup, String address, String aadhaar, String abha, List<Condition> oldDiagnosis, List<com.uphi.backend.domain.models.Allergy> allergies, String emergencyContactName, String emergencyContactPhone, int age, List<com.uphi.backend.domain.models.Medication> medications) {
         User requester = null;
         if (!"SELF".equals(requesterUsername)) {
              requester = verifyReceptionistOrAdmin(requesterUsername);
         }
 
-        // Verify the Email-based OTP manually
-        if (!otpService.verifyOtp(email, otp)) {
+        // Verify the OTP — use email if available, otherwise phone
+        String otpIdentity = (email != null && !email.isEmpty()) ? email : phone;
+        if (!otpService.verifyOtp(otpIdentity, otp)) {
             throw new IllegalArgumentException("Invalid or expired OTP code.");
         }
 
-        java.util.Optional<User> existingUserOpt = userRepository.findByEmail(email);
+        java.util.Optional<User> existingUserOpt = (email != null && !email.isEmpty()) ? userRepository.findByEmail(email.trim().toLowerCase()) : java.util.Optional.empty();
         java.util.Optional<Patient> existingPatientOpt = (abha != null && !abha.isEmpty()) ? patientRepository.findByAbhaAddress(abha) : java.util.Optional.empty();
 
+        // Check duplicate email logic
+        if (existingUserOpt.isPresent()) {
+            Patient existingPatientOfUser = patientRepository.findByUserId(existingUserOpt.get().getId()).orElse(null);
+            if (existingPatientOfUser != null) {
+                // 1. If it's a SELF registration, reject immediately
+                if ("SELF".equals(requesterUsername)) {
+                    throw new IllegalArgumentException("Email is already registered.");
+                }
+                // 2. If ABHA address is provided and doesn't match the existing patient's ABHA, reject
+                if (abha != null && !abha.isEmpty() && !abha.equals(existingPatientOfUser.getAbhaAddress())) {
+                    throw new IllegalArgumentException("Email is already registered to a different patient.");
+                }
+                // 3. If Aadhaar is provided and doesn't match the existing patient's Aadhaar, reject
+                if (aadhaar != null && !aadhaar.isEmpty() && existingPatientOfUser.getAadhaar() != null && !existingPatientOfUser.getAadhaar().isEmpty() && !aadhaar.equals(existingPatientOfUser.getAadhaar())) {
+                    throw new IllegalArgumentException("Email is already registered to a different patient.");
+                }
+            }
+        }
+
+        // Also check by phone for duplicate prevention
+        if (existingUserOpt.isEmpty() && phone != null && !phone.isEmpty()) {
+            existingUserOpt = userRepository.findByMobile(phone);
+        }
+
+        final String existingUserId = existingUserOpt.isPresent() ? existingUserOpt.get().getId() : null;
         if (existingUserOpt.isPresent() || existingPatientOpt.isPresent()) {
-            Patient existingPatient = existingPatientOpt.orElseGet(() -> patientRepository.findByUserId(existingUserOpt.get().getId()).orElseThrow());
+            Patient existingPatient = existingPatientOpt.orElseGet(() -> patientRepository.findByUserId(existingUserId).orElseThrow(() -> new IllegalArgumentException("Patient record not found for existing user. Please contact support.")));
             existingPatient.setFullName(fullName);
             existingPatient.setPhone(phone);
             existingPatient.setDob(dob);
@@ -75,6 +97,33 @@ public class ReceptionistService {
             existingPatient.setBloodGroup(bloodGroup);
             if (oldDiagnosis != null && !oldDiagnosis.isEmpty()) {
                 existingPatient.setConditions(oldDiagnosis);
+            }
+            if (allergies != null && !allergies.isEmpty()) {
+                existingPatient.setAllergies(allergies);
+            }
+            if (medications != null && !medications.isEmpty()) {
+                existingPatient.setMedications(medications);
+            }
+            // Update emergency contact if provided
+            if (emergencyContactName != null && !emergencyContactName.isEmpty()) {
+                com.uphi.backend.domain.models.EmergencyContact ec = existingPatient.getEmergencyContact();
+                if (ec == null) ec = new com.uphi.backend.domain.models.EmergencyContact();
+                ec.setName(emergencyContactName);
+                ec.setPhone(emergencyContactPhone);
+                existingPatient.setEmergencyContact(ec);
+            }
+            // Update address in ContactInfo
+            if (address != null && !address.isEmpty()) {
+                com.uphi.backend.domain.models.ContactInfo ci = existingPatient.getContactInfo();
+                if (ci == null) ci = new com.uphi.backend.domain.models.ContactInfo();
+                ci.setAddress(address);
+                existingPatient.setContactInfo(ci);
+            }
+            // Update age
+            if (age > 0) {
+                existingPatient.setAge(age);
+            } else if (dob != null && !dob.isEmpty()) {
+                existingPatient.setAge(calculateAgeFromDob(dob));
             }
             if (existingPatient.getAffiliatedHospitals() == null) {
                 existingPatient.setAffiliatedHospitals(new java.util.HashSet<>());
@@ -108,9 +157,39 @@ public class ReceptionistService {
         patient.setBloodGroup(bloodGroup);
         patient.setAadhaar(aadhaar);
         patient.setConditions(oldDiagnosis != null ? oldDiagnosis : List.of());
-        // Address could be stored in ContactInfo if we expand the model, storing mock for now or mapping it:
-        // We will store it in the email field temporarily as address isn't in base Patient.java yet, or just skip.
-        
+
+        // Store allergies
+        if (allergies != null && !allergies.isEmpty()) {
+            patient.setAllergies(allergies);
+        }
+
+        // Store medications
+        if (medications != null && !medications.isEmpty()) {
+            patient.setMedications(medications);
+        }
+
+        // Store address in ContactInfo
+        if (address != null && !address.isEmpty()) {
+            com.uphi.backend.domain.models.ContactInfo contactInfo = new com.uphi.backend.domain.models.ContactInfo();
+            contactInfo.setAddress(address);
+            patient.setContactInfo(contactInfo);
+        }
+
+        // Store emergency contact
+        if (emergencyContactName != null && !emergencyContactName.isEmpty()) {
+            com.uphi.backend.domain.models.EmergencyContact ec = new com.uphi.backend.domain.models.EmergencyContact();
+            ec.setName(emergencyContactName);
+            ec.setPhone(emergencyContactPhone);
+            patient.setEmergencyContact(ec);
+        }
+
+        // Compute and store age
+        if (age > 0) {
+            patient.setAge(age);
+        } else if (dob != null && !dob.isEmpty()) {
+            patient.setAge(calculateAgeFromDob(dob));
+        }
+
         // Multi-Tenancy Patient Siphoning
         if (patient.getAffiliatedHospitals() == null) {
             patient.setAffiliatedHospitals(new java.util.HashSet<>());
@@ -120,6 +199,15 @@ public class ReceptionistService {
         }
 
         return patientRepository.save(patient);
+    }
+
+    private int calculateAgeFromDob(String dob) {
+        try {
+            java.time.LocalDate birthDate = java.time.LocalDate.parse(dob);
+            return java.time.Period.between(birthDate, java.time.LocalDate.now()).getYears();
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     public void removePatient(String requesterUsername, String patientId) {

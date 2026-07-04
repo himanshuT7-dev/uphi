@@ -80,6 +80,16 @@ public class PatientService {
                 throw new IllegalArgumentException("ABHA Address already exists");
             }
         }
+        if (patient.getEmail() != null && !patient.getEmail().trim().isEmpty()) {
+            if (userRepository.findByEmail(patient.getEmail().trim().toLowerCase()).isPresent()) {
+                throw new IllegalArgumentException("Email already registered");
+            }
+        }
+        if (patient.getPhone() != null && !patient.getPhone().trim().isEmpty()) {
+            if (userRepository.findByMobile(patient.getPhone().trim()).isPresent()) {
+                throw new IllegalArgumentException("Phone number already registered");
+            }
+        }
         return patientRepository.save(patient);
     }
 

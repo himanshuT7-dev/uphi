@@ -63,3 +63,6 @@ stdout.log
 
 # Other
 .DS_Store
+
+# Media & Videos
+video/
