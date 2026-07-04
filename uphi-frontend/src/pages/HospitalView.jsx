@@ -1052,6 +1052,24 @@ function RegisterPatientPage({ onNavigate, onAddPatient, onDownloadCard, prefill
                 });
             }
 
+            // Build allergies list
+            const allergies = [];
+            if (formData.allergies) {
+                formData.allergies.split(',').forEach(a => {
+                    const aname = a.trim();
+                    if (aname) allergies.push({ name: aname, severity: 'MODERATE' });
+                });
+            }
+
+            // Build medications list
+            const medications = [];
+            if (formData.currentMedications) {
+                formData.currentMedications.split(',').forEach(m => {
+                    const mname = m.trim();
+                    if (mname) medications.push({ name: mname });
+                });
+            }
+
             const pRes = await axios.post('/api/receptionist/patients/register', {
                 email: formData.email.trim().toLowerCase(),
                 phone: formData.phone.trim(),
@@ -1063,7 +1081,12 @@ function RegisterPatientPage({ onNavigate, onAddPatient, onDownloadCard, prefill
                 address: `${formData.street}, ${formData.city}, ${formData.state} ${formData.pincode}`,
                 aadhaar: formData.aadhaar,
                 abha: formData.abha,
-                oldDiagnosis: conditions
+                oldDiagnosis: conditions,
+                allergies: allergies,
+                medications: medications,
+                emergencyContactName: formData.emergencyContactName?.trim() || '',
+                emergencyContactPhone: formData.emergencyContactPhone?.trim() || '',
+                age: formData.age ? parseInt(formData.age, 10) : 0
             }, config);
 
 
@@ -1108,7 +1131,7 @@ function RegisterPatientPage({ onNavigate, onAddPatient, onDownloadCard, prefill
                     <button onClick={() => onDownloadCard(newPatient?.id, newPatient?.name)} style={{ padding: "12px 24px", borderRadius: 12, border: "none", background: "rgba(34,197,94,0.1)", color: "#16a34a", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
                         <FileText size={18} /> Download ID Card
                     </button>
-                    <button onClick={() => { setFormData({ name: "", age: "", gender: "", phone: "", email: "", bloodGroup: "", emergencyContactName: "", emergencyContactPhone: "", street: "", city: "", state: "", pincode: "", existingConditions: "", allergies: "", currentMedications: "", lifestyleFactors: "", hasAadhaar: false, aadhaar: "", hasAbha: false, abha: "" }); setStep(1); setIsSuccess(false); }} style={{ padding: "12px 24px", borderRadius: 12, border: "1px solid var(--border)", background: "transparent", color: "var(--text-primary)", fontWeight: 600, cursor: "pointer" }}>Register Another</button>
+                    <button onClick={() => { setFormData({ name: "", age: "", gender: "", dob: "", phone: "", email: "", bloodGroup: "", emergencyContactName: "", emergencyContactPhone: "", street: "", city: "", state: "", pincode: "", existingConditions: "", allergies: "", currentMedications: "", lifestyleFactors: "", hasAadhaar: false, aadhaar: "", hasAbha: false, abha: "" }); setStep(1); setIsSuccess(false); }} style={{ padding: "12px 24px", borderRadius: 12, border: "1px solid var(--border)", background: "transparent", color: "var(--text-primary)", fontWeight: 600, cursor: "pointer" }}>Register Another</button>
                     <button onClick={() => onNavigate("search")} style={{ padding: "12px 24px", borderRadius: 12, border: "none", background: "var(--accent)", color: "#fff", fontWeight: 600, cursor: "pointer" }}>Go to Registry</button>
                 </div>
             </div>

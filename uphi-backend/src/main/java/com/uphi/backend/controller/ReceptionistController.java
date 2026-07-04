@@ -1,7 +1,9 @@
 package com.uphi.backend.controller;
 
 import com.uphi.backend.domain.Patient;
+import com.uphi.backend.domain.models.Allergy;
 import com.uphi.backend.domain.models.Condition;
+import com.uphi.backend.domain.models.Medication;
 import com.uphi.backend.domain.models.RelatedPerson;
 import com.uphi.backend.service.PdfService;
 import com.uphi.backend.service.ReceptionistService;
@@ -36,16 +38,11 @@ public class ReceptionistController {
         // Publicly accessible for patient registration flow
         try {
             String email = request.get("email");
-            String phone = request.get("phone");
-            
-            if (phone != null && !phone.isEmpty()) {
-                receptionistService.requestPatientSmsOtp(phone);
-                return ResponseEntity.ok("Patient OTP dispatched to phone.");
-            } else if (email != null && !email.isEmpty()) {
+            if (email != null && !email.isEmpty()) {
                 receptionistService.requestPatientOtp(email);
                 return ResponseEntity.ok("Patient OTP dispatched to email.");
             } else {
-                return ResponseEntity.badRequest().body("Neither email nor phone provided for OTP.");
+                return ResponseEntity.badRequest().body("Email not provided for OTP.");
             }
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -87,7 +84,12 @@ public class ReceptionistController {
                     request.getAddress(),
                     request.getAadhaar(),
                     request.getAbha(),
-                    request.getOldDiagnosis()
+                    request.getOldDiagnosis(),
+                    request.getAllergies(),
+                    request.getEmergencyContactName(),
+                    request.getEmergencyContactPhone(),
+                    request.getAge(),
+                    request.getMedications()
             );
 
             return ResponseEntity.ok(created);
@@ -122,6 +124,11 @@ public class ReceptionistController {
         private String aadhaar;
         private String abha;
         private List<Condition> oldDiagnosis;
+        private List<Allergy> allergies;
+        private String emergencyContactName;
+        private String emergencyContactPhone;
+        private int age;
+        private List<Medication> medications;
 
         public String getEmail() { return email; }
         public void setEmail(String email) { this.email = email; }
@@ -151,6 +158,16 @@ public class ReceptionistController {
         public void setAbha(String abha) { this.abha = abha; }
         public List<Condition> getOldDiagnosis() { return oldDiagnosis; }
         public void setOldDiagnosis(List<Condition> oldDiagnosis) { this.oldDiagnosis = oldDiagnosis; }
+        public List<Allergy> getAllergies() { return allergies; }
+        public void setAllergies(List<Allergy> allergies) { this.allergies = allergies; }
+        public String getEmergencyContactName() { return emergencyContactName; }
+        public void setEmergencyContactName(String emergencyContactName) { this.emergencyContactName = emergencyContactName; }
+        public String getEmergencyContactPhone() { return emergencyContactPhone; }
+        public void setEmergencyContactPhone(String emergencyContactPhone) { this.emergencyContactPhone = emergencyContactPhone; }
+        public int getAge() { return age; }
+        public void setAge(int age) { this.age = age; }
+        public List<Medication> getMedications() { return medications; }
+        public void setMedications(List<Medication> medications) { this.medications = medications; }
     }
 
     @GetMapping("/{id}/id-card")

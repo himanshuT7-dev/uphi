@@ -19,9 +19,6 @@ public class OtpService {
     @Autowired
     private JavaMailSender mailSender;
  
-    @Autowired
-    private SmsService smsService;
-
     // In-memory cache for OTPs -> {email: otp}
     private final Map<String, String> otpStore = new ConcurrentHashMap<>();
     private final Random random = new Random();
@@ -41,19 +38,6 @@ public class OtpService {
         } catch (Exception e) {
             logger.error("Failed to send OTP email to {}: {}", targetEmail, e.getMessage());
             return otp; // Fallback to console print in generateOtpForIdentity
-        }
-    }
- 
-    public String generateAndSendSmsOtp(String phone) {
-        String otp = generateOtpForIdentity(phone);
-        try {
-            String messageBody = "Your UPHI verification code is: " + otp + ". Securely link your ABHA/Aadhaar identity.";
-            smsService.sendSms(phone, messageBody);
-            logger.info("OTP SMS dispatched successfully to {}", phone);
-            return otp;
-        } catch (Exception e) {
-            logger.error("Failed to send OTP SMS to {}: {}", phone, e.getMessage());
-            return otp;
         }
     }
  

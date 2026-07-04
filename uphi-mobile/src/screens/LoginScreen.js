@@ -59,28 +59,43 @@ export default function LoginScreen() {
           return;
         }
       } else {
-        // Real world — verify via register
+        // Step 1: Verify OTP first
         try {
-          const res = await api.post('/api/receptionist/patients/register', {
+          await api.post('/api/receptionist/patients/otp/verify', {
             email: identifier.includes('@') ? identifier.trim() : null,
             phone: !identifier.includes('@') ? identifier.trim() : null,
             otp: otp.trim(),
-            fullName: 'Patient ' + identifier.split('@')[0],
-            dob: '2000-01-01',
-            gender: 'Other',
-            bloodGroup: '',
-            address: 'India',
-            oldDiagnosis: [],
           });
-          abhaAddress = res.data.abhaAddress;
-        } catch (regErr) {
-          if (regErr.response?.status === 400) {
-            abhaAddress = identifier.trim();
-          } else throw regErr;
+        } catch (otpErr) {
+          setError('Invalid or expired OTP. Please try again.');
+          setLoading(false);
+          return;
         }
-        finalPassword = 'PatientSecure@' + identifier.split('@')[0];
+
+        // Step 2: Try logging in directly — patient may already be registered by receptionist
+        const emailPrefix = identifier.includes('@') ? identifier.split('@')[0] : identifier;
+        finalPassword = 'PatientSecure@' + emailPrefix;
+
+        try {
+          const loginRes = await api.post('/api/auth/login', {
+            username: identifier.trim(),
+            password: finalPassword,
+          });
+          await login(loginRes.data);
+          setLoading(false);
+          return; // Success — patient was already registered
+        } catch (loginErr) {
+          // Login failed — patient not yet registered
+          // Show a helpful message instead of creating a junk record
+          setError(
+            'No account found for this identity. Please visit the hospital reception to register, or contact support.'
+          );
+          setLoading(false);
+          return;
+        }
       }
 
+      // Demo persona login
       const loginRes = await api.post('/api/auth/login', {
         username: abhaAddress,
         password: finalPassword,

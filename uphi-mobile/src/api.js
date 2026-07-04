@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Change this to your laptop's current WiFi IP before the demo
-export const API_BASE = 'http://10.131.235.73:8080';
+export const API_BASE = 'http://192.168.1.7:8080';
 
 const api = axios.create({
   baseURL: API_BASE,
