@@ -1,18 +1,16 @@
 spring:
   application:
     name: uphi-backend
-    
+
   data:
     mongodb:
-      uri: "mongodb://localhost:27017/uphi"
-  mongodb:
-    uri: "mongodb://localhost:27017/uphi"
+      uri: ${MONGODB_URI}
 
   mail:
     host: smtp.gmail.com
     port: 587
-    username: ${MAIL_USERNAME:your-email@gmail.com}
-    password: ${MAIL_PASSWORD:your_app_password}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
 
     properties:
       mail:
@@ -25,11 +23,9 @@ server:
   port: 8080
 
 jwt:
-  secret: ${JWT_SECRET:your_jwt_secret}
+  secret: ${JWT_SECRET}
   expiration: 86400000 # 24 hours in milliseconds
 
 gemini:
-  api-key: ${GEMINI_API_KEY:your_api_key}
+  api-key: ${GEMINI_API_KEY}
   model: gemini-2.0-flash
- 
-
